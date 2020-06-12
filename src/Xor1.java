@@ -1,15 +1,9 @@
-import java.util.Random;
-
-import com.neocoretechs.neurovolve.Chromosome;
-import com.neocoretechs.neurovolve.Function;
-import com.neocoretechs.neurovolve.fitnessfunctions.FitnessFunction;
-import com.neocoretechs.neurovolve.functions.Variable;
-import com.neocoretechs.neurovolve.objects.Matrix2x2;
-import com.neocoretechs.neurovolve.objects.Matrix3x3;
-import com.neocoretechs.neurovolve.objects.MatrixNxN;
-import com.neocoretechs.neurovolve.objects.Strings;
+import com.neocoretechs.neurovolve.Neurosome;
+import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
 import com.neocoretechs.neurovolve.worlds.RelatrixWorld;
 import com.neocoretechs.neurovolve.worlds.World;
+import com.neocoretechs.volvex.functions.False;
+import com.neocoretechs.volvex.functions.True;
 
 /**
  * Fitness function for the Xor test expressed as a neural network evolving in the Neurovolve framework.
@@ -20,10 +14,10 @@ import com.neocoretechs.neurovolve.worlds.World;
  * @author groff
  *
  */
-public class Xor1 extends FitnessFunction {
+public class Xor1 extends NeurosomeFitnessFunction {
 	private static final long serialVersionUID = 3845408762831534097L;
 	// x1, x2 x 4, 2 inputs 4 values to xor
-	public final float[][] seeds = {{0,0},{0,1},{1,0},{1,1}};
+	public final Object[][] seeds = {{new False(),new False()},{new False(),new True()},{new True(),new False()},{new True(), new True()}};
 	final float[][] targs = {{0f,.01f},{.99f,1.0f},{.99f,1.0f},{0f,.01f}};
 	/**
 	 * @param guid
@@ -35,8 +29,8 @@ public class Xor1 extends FitnessFunction {
 	 * @param argTypes
 	 * @param returnType
 	 */
-	public Xor1(World w, Class[] argTypes, Class returnType) {
-		super(w,argTypes, returnType);
+	public Xor1(World w) {
+		super(w);
 	}
 
 	/**
@@ -48,7 +42,7 @@ public class Xor1 extends FitnessFunction {
 	    /**
 	     *
 	     */     
-	public Object execute(Chromosome ind) {
+	public Object execute(Neurosome ind) {
 		    	 	 float hits = 0;
 		             float rawFit = -1;
 
@@ -57,7 +51,7 @@ public class Xor1 extends FitnessFunction {
 		            
 				     for(int test = 0; test <((RelatrixWorld)world).TestsPerStep ; test++) {
 				    	for(int step = 0; step < ((RelatrixWorld)world).MaxSteps; step++) {
-				    		float[] res = ind.execute(seeds[step]);
+				    		float[] res = (float[]) ind.execute(seeds[step]);
 				    		if(World.SHOWTRUTH)
 				    			System.out.println("ind:"+ind+" seeds["+step+"]="+seeds[step][0]+","+seeds[step][1]+" targs:"+targs[step][0]+","+targs[step][1]+" res:"+res[0]);
 				    		if(res[0] >= targs[step][0] && res[0] <= targs[step][1]) {
