@@ -1,3 +1,5 @@
+import java.util.Arrays;
+
 import com.neocoretechs.neurovolve.Neurosome;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
 import com.neocoretechs.neurovolve.worlds.RelatrixWorld;
@@ -53,7 +55,7 @@ public class Xor1 extends NeurosomeFitnessFunction {
 				    	for(int step = 0; step < ((RelatrixWorld)world).MaxSteps; step++) {
 				    		float[] res = (float[]) ind.execute(seeds[step]);
 				    		if(World.SHOWTRUTH)
-				    			System.out.println("ind:"+ind+" seeds["+step+"]="+seeds[step][0]+","+seeds[step][1]+" targs:"+targs[step][0]+","+targs[step][1]+" res:"+res[0]);
+				    			System.out.println("ind:"+ind+" seeds["+step+"]="+seeds[step][0]+","+seeds[step][1]+" targs:"+targs[step][0]+","+targs[step][1]+" res:"+Arrays.toString(res));
 				    		if(res[0] >= targs[step][0] && res[0] <= targs[step][1]) {
 				    			++hits;
 				    			results[step][0] = true;
