@@ -34,6 +34,7 @@ public class imgclf extends NeurosomeFitnessFunction {
 	private static boolean DEBUG = false;
 	private static String prefix = "D:/etc/images/trainset/";
     private static Object mutex = new Object();
+    private World world;
 	Dataset dataset;
 	// We'll hardwire these in, but more robust code would not do so.
 	private static enum Category {
@@ -55,6 +56,7 @@ public class imgclf extends NeurosomeFitnessFunction {
 	 */
 	public imgclf(World w, String guid) {
 		super(w, guid);
+		this.world = w;
 		init();
 	}
 	/**
@@ -63,6 +65,7 @@ public class imgclf extends NeurosomeFitnessFunction {
 	 */
 	public imgclf(World w) {
 		super(w);
+		this.world = w;
 		init();
 	}
 
@@ -82,6 +85,7 @@ public class imgclf extends NeurosomeFitnessFunction {
 		System.out.printf("Dataset from %s loaded with %d images%n", prefix, dataset.getSize());
 		// Construct a new world to spin up remote connection
 		//categoryNames.get(index).getName() is category
+		((RelatrixWorld)world).setStepFactors(dataset.getSize(), 1);
 	}
 	    	
 	@Override
@@ -91,10 +95,11 @@ public class imgclf extends NeurosomeFitnessFunction {
         float rawFit = -1;
         int errCount = 0;
         List<Instance> images = dataset.getImages();
-        boolean[][] results = new boolean[dataset.getSize()][(int) ((RelatrixWorld)world).TestsPerStep];
+        boolean[][] results = new boolean[(int) ((RelatrixWorld)world).MaxSteps][(int) ((RelatrixWorld)world).TestsPerStep];
         
-	    for(int test = 0; test <((RelatrixWorld)world).TestsPerStep ; test++) {
-	    	for(int step = 0; step < dataset.getSize(); step++) {
+	    for(int test = 0; test < ((RelatrixWorld)world).TestsPerStep ; test++) {
+	    	for(int step = 0; step < ((RelatrixWorld)world).MaxSteps; step++) {
+	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
 	    		Instance img = images.get(step);
 	    		Plate[] plates = instanceToPlate(img);
 	    		double[] d = packPlates(Arrays.asList(plates));
@@ -107,7 +112,7 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    			errCount++;
 	    		} else {
 	    			++hits;
-	    			results[step][0] = true;
+	    			results[step][test] = true;
 	    		}
 	    	}
 	      }
