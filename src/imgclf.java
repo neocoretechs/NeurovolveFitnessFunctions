@@ -117,14 +117,16 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    	}
 	      }
 		if(World.SHOWTRUTH)
-			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount/*"Input "+img.toString()+*/);
+			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/dataset.getSize())*100+"%"/*"Input "+img.toString()+*/);
          //if( al.data.size() == 1 && ((Strings)(al.data.get(0))).data.equals("d")) hits = 10; // test
          rawFit = (((RelatrixWorld)world).MinRawFitness - hits);
          // The SHOWTRUTH flag is set on best individual during run. We make sure to 
          // place the checkAndStore inside the SHOWTRUTH block to ensure we only attempt to process
          // the best individual, and this is what occurs in the showTruth method
+         if(.8 <= (hits/dataset.getSize()))
+        	 rawFit = 0;
          ((RelatrixWorld)world).showTruth(ind, rawFit, results);
-       
+         // break at 80% success
          return rawFit;
 	}
 
