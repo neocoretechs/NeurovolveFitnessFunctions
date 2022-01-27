@@ -1,6 +1,8 @@
 
 import static cnn.tools.Util.checkNotEmpty;
 
+import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
 import java.io.File;
 import java.io.IOException;
 
@@ -101,11 +103,23 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    	for(int step = 0; step < ((RelatrixWorld)world).MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
 	    		Instance img = images.get(step);
-	    		Plate[] plates = instanceToPlate(img);
-	    		double[] d = packPlates(Arrays.asList(plates));
-	    		float[] inFloat = new float[d.length];
-	    		for(int i = 0; i < d.length; i++)
-	    			inFloat[i] = (float) d[i];
+	    		//Plate[] plates = instanceToPlate(img);
+	    		//double[] d = packPlates(Arrays.asList(plates));
+	    		float[] inFloat = new float[img.getWidth()*img.getHeight()];
+	    		int[] dstBuff = new int[img.getWidth()*img.getHeight()];
+	    		Instance.readLuminance(img.getImage(), dstBuff);
+	    		int i = 0;
+	    		for (int row = 0; row < img.getHeight(); ++row) {
+	    			for (int col = 0; col < img.getWidth(); ++col) {
+	    				inFloat[i] = ((float)dstBuff[i]) / 255.0f;
+		    			//System.out.println(i+"="+inFloat[i]);
+		    			++i;
+	    			}
+
+	    		}
+	    		//float[] inFloat = new float[d.length];
+	    		//for(int i = 0; i < d.length; i++)
+	    			//inFloat[i] = (float) d[i];
 	    		float[] outNeuro = ind.execute(inFloat);
 	    		String predicted = classify(img, outNeuro);
 	    		if (!predicted.equals(img.getLabel())) {
