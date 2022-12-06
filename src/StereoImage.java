@@ -8,6 +8,7 @@ import java.io.InputStream;
 import javax.imageio.ImageIO;
 
 import com.neocoretechs.neurovolve.Neurosome;
+import com.neocoretechs.neurovolve.NeurosomeInterface;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
 import com.neocoretechs.neurovolve.properties.LoadProperties;
 import com.neocoretechs.neurovolve.worlds.RelatrixWorld;
@@ -61,7 +62,7 @@ public class StereoImage extends NeurosomeFitnessFunction {
 	public StereoImage() {}
 	    	
 	@Override
-	public Object execute(Neurosome ind) {
+	public Object execute(NeurosomeInterface ind) {
 		try {
 			rkvc = new RelatrixClient(LoadProperties.slocallIP, LoadProperties.sremoteIp, 9020);
 		} catch (IOException e2) {
@@ -123,7 +124,7 @@ public class StereoImage extends NeurosomeFitnessFunction {
          // The SHOWTRUTH flag is set on best individual during run. We make sure to 
          // place the checkAndStore inside the SHOWTRUTH block to ensure we only attempt to process
          // the best individual, and this is what occurs in the showTruth method
-         ((RelatrixWorld)world).showTruth(ind, rawFit, results);
+         ((RelatrixWorld)world).showTruth((Neurosome) ind, rawFit, results);
          
          return rawFit;
 	}

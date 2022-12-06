@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import com.neocoretechs.neurovolve.Neurosome;
+import com.neocoretechs.neurovolve.NeurosomeInterface;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
 import com.neocoretechs.neurovolve.properties.LoadProperties;
 import com.neocoretechs.neurovolve.worlds.RelatrixWorld;
@@ -91,7 +92,7 @@ public class imgclf extends NeurosomeFitnessFunction {
 	}
 	    	
 	@Override
-	public Object execute(Neurosome ind) {
+	public Object execute(NeurosomeInterface ind) {
 			
 	 	float hits = 0;
         float rawFit = -1;
@@ -103,8 +104,9 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    	for(int step = 0; step < ((RelatrixWorld)world).MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
 	    		Instance img = images.get(step);
-	    		//Plate[] plates = instanceToPlate(img);
-	    		//double[] d = packPlates(Arrays.asList(plates));
+	    		Plate[] plates = instanceToPlate(img);
+	    		double[] d = packPlates(Arrays.asList(plates));
+	    		/*
 	    		float[] inFloat = new float[img.getWidth()*img.getHeight()];
 	    		int[] dstBuff = new int[img.getWidth()*img.getHeight()];
 	    		Instance.readLuminance(img.getImage(), dstBuff);
@@ -117,9 +119,10 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    			}
 
 	    		}
-	    		//float[] inFloat = new float[d.length];
-	    		//for(int i = 0; i < d.length; i++)
-	    			//inFloat[i] = (float) d[i];
+	    		*/
+	    		float[] inFloat = new float[d.length];
+	    		for(int i = 0; i < d.length; i++)
+	    			inFloat[i] = (float) d[i];
 	    		float[] outNeuro = ind.execute(inFloat);
 	    		String predicted = classify(img, outNeuro);
 	    		if (!predicted.equals(img.getLabel())) {
@@ -139,7 +142,7 @@ public class imgclf extends NeurosomeFitnessFunction {
          // the best individual, and this is what occurs in the showTruth method
          if(.8 <= (hits/dataset.getSize()))
         	 rawFit = 0;
-         ((RelatrixWorld)world).showTruth(ind, rawFit, results);
+         ((RelatrixWorld)world).showTruth((Neurosome) ind, rawFit, results);
          // break at 80% success
          return rawFit;
 	}
