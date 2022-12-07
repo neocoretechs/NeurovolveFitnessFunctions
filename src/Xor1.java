@@ -1,8 +1,10 @@
 import java.util.Arrays;
 
 import com.neocoretechs.neurovolve.Neurosome;
+import com.neocoretechs.neurovolve.NeurosomeInterface;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
 import com.neocoretechs.neurovolve.worlds.RelatrixWorld;
+import com.neocoretechs.neurovolve.worlds.RockSackWorld;
 import com.neocoretechs.neurovolve.worlds.World;
 import com.neocoretechs.volvex.functions.False;
 import com.neocoretechs.volvex.functions.True;
@@ -44,15 +46,15 @@ public class Xor1 extends NeurosomeFitnessFunction {
 	    /**
 	     *
 	     */     
-	public Object execute(Neurosome ind) {
+	public Object execute(NeurosomeInterface ind) {
 		    	 	 float hits = 0;
 		             float rawFit = -1;
 
 		             Object[] arg = new Object[1];
-		             boolean[][] results = new boolean[(int)((RelatrixWorld)world).MaxSteps][(int) ((RelatrixWorld)world).TestsPerStep];
+		             boolean[][] results = new boolean[(int)((RockSackWorld)world).MaxSteps][(int) ((RockSackWorld)world).TestsPerStep];
 		            
-				     for(int test = 0; test <((RelatrixWorld)world).TestsPerStep ; test++) {
-				    	for(int step = 0; step < ((RelatrixWorld)world).MaxSteps; step++) {
+				     for(int test = 0; test <((RockSackWorld)world).TestsPerStep ; test++) {
+				    	for(int step = 0; step < ((RockSackWorld)world).MaxSteps; step++) {
 				    		float[] res = (float[]) ind.execute(seeds[step]);
 				    		if(World.SHOWTRUTH)
 				    			System.out.println("ind:"+ind+" seeds["+step+"]="+seeds[step][0]+","+seeds[step][1]+" targs:"+targs[step][0]+","+targs[step][1]+" res:"+Arrays.toString(res));
@@ -64,11 +66,11 @@ public class Xor1 extends NeurosomeFitnessFunction {
 				      }
 				      
 		             //if( al.data.size() == 1 && ((Strings)(al.data.get(0))).data.equals("d")) hits = 10; // test
-		             rawFit = (((RelatrixWorld)world).MinRawFitness - hits);
+		             rawFit = (((RockSackWorld)world).MinRawFitness - hits);
 		             // The SHOWTRUTH flag is set on best individual during run. We make sure to 
 		             // place the checkAndStore inside the SHOWTRUTH block to ensure we only attempt to process
 		             // the best individual, and this is what occurs in the showTruth method
-		             ((RelatrixWorld)world).showTruth(ind, rawFit, results);
+		             ((RockSackWorld)world).showTruth(ind, rawFit, results);
 		             
 		             return rawFit;
 		     }
