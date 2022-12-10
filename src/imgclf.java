@@ -14,7 +14,7 @@ import com.neocoretechs.neurovolve.Neurosome;
 import com.neocoretechs.neurovolve.NeurosomeInterface;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
 import com.neocoretechs.neurovolve.properties.LoadProperties;
-import com.neocoretechs.neurovolve.worlds.RelatrixWorld;
+import com.neocoretechs.neurovolve.worlds.RockSackWorld;
 import com.neocoretechs.neurovolve.worlds.World;
 
 import com.neocoretechs.relatrix.client.RelatrixClient;
@@ -75,11 +75,6 @@ public class imgclf extends NeurosomeFitnessFunction {
 	public imgclf() {}
 	
 	public void init() {
-		try {
-			RelatrixWorld.ri = new RelatrixClient(LoadProperties.slocallIP, LoadProperties.sremoteIp, 9010);
-		} catch (IOException e2) {
-			throw new RuntimeException();
-		}
 
 		//if(args.length < 2)
 		//	throw new Exception("Usage:java Infer <LocalIP Client> <Remote IpServer> <DB Port> <GUID of Neurosome> <Image file or directory>");
@@ -88,7 +83,7 @@ public class imgclf extends NeurosomeFitnessFunction {
 		System.out.printf("Dataset from %s loaded with %d images%n", prefix, dataset.getSize());
 		// Construct a new world to spin up remote connection
 		//categoryNames.get(index).getName() is category
-		((RelatrixWorld)world).setStepFactors(dataset.getSize(), 1);
+		((RockSackWorld)world).setStepFactors(dataset.getSize(), 1);
 	}
 	    	
 	@Override
@@ -98,10 +93,10 @@ public class imgclf extends NeurosomeFitnessFunction {
         float rawFit = -1;
         int errCount = 0;
         List<Instance> images = dataset.getImages();
-        boolean[][] results = new boolean[(int) ((RelatrixWorld)world).MaxSteps][(int) ((RelatrixWorld)world).TestsPerStep];
+        boolean[][] results = new boolean[(int) ((RockSackWorld)world).MaxSteps][(int) ((RockSackWorld)world).TestsPerStep];
         
-	    for(int test = 0; test < ((RelatrixWorld)world).TestsPerStep ; test++) {
-	    	for(int step = 0; step < ((RelatrixWorld)world).MaxSteps; step++) {
+	    for(int test = 0; test < ((RockSackWorld)world).TestsPerStep ; test++) {
+	    	for(int step = 0; step < ((RockSackWorld)world).MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
 	    		Instance img = images.get(step);
 	    		Plate[] plates = instanceToPlate(img);
@@ -136,13 +131,13 @@ public class imgclf extends NeurosomeFitnessFunction {
 		if(World.SHOWTRUTH)
 			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/dataset.getSize())*100+"%"/*"Input "+img.toString()+*/);
          //if( al.data.size() == 1 && ((Strings)(al.data.get(0))).data.equals("d")) hits = 10; // test
-         rawFit = (((RelatrixWorld)world).MinRawFitness - hits);
+         rawFit = (((RockSackWorld)world).MinRawFitness - hits);
          // The SHOWTRUTH flag is set on best individual during run. We make sure to 
          // place the checkAndStore inside the SHOWTRUTH block to ensure we only attempt to process
          // the best individual, and this is what occurs in the showTruth method
          if(.8 <= (hits/dataset.getSize()))
         	 rawFit = 0;
-         ((RelatrixWorld)world).showTruth((Neurosome) ind, rawFit, results);
+         ((RockSackWorld)world).showTruth((Neurosome) ind, rawFit, results);
          // break at 80% success
          return rawFit;
 	}
