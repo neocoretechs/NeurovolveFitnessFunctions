@@ -38,7 +38,8 @@ public class imgclf extends NeurosomeFitnessFunction {
 	private static String prefix = "D:/etc/images/trainset/";
     private static Object mutex = new Object();
     private World world;
-	Dataset dataset;
+    private static float breakOnAccuracyPercentage = .8f; // set to 0 for 100% accuracy expected
+	//Dataset dataset;
 	// We'll hardwire these in, but more robust code would not do so.
 	private static enum Category {
 		airplanes, butterfly, flower, grand_piano, starfish, watch
@@ -53,6 +54,10 @@ public class imgclf extends NeurosomeFitnessFunction {
 			categoryNames.add(cat.toString());
 		}
 	}
+	
+	public static int datasetSize;
+	public static float[][] imageVecs; // each image as 1D float vector
+	private static String[] imageLabels;
 	
 	/**
 	 * @param guid
@@ -79,11 +84,14 @@ public class imgclf extends NeurosomeFitnessFunction {
 		//if(args.length < 2)
 		//	throw new Exception("Usage:java Infer <LocalIP Client> <Remote IpServer> <DB Port> <GUID of Neurosome> <Image file or directory>");
 		//new RelatrixClient(args[0], args[1], Integer.parseInt(args[2]));
-		dataset = Util.loadDataset(new File(prefix), null, false);
-		System.out.printf("Dataset from %s loaded with %d images%n", prefix, dataset.getSize());
+		Dataset dataset = Util.loadDataset(new File(prefix), null, false);
+		datasetSize = dataset.getSize();
+		System.out.printf("Dataset from %s loaded with %d images%n", prefix, datasetSize);
 		// Construct a new world to spin up remote connection
 		//categoryNames.get(index).getName() is category
-		((RockSackWorld)world).setStepFactors(dataset.getSize(), 1);
+		// MinRawFitness is steps * testPerStep args one and two of setStepFactors
+		((RockSackWorld)world).setStepFactors(datasetSize, 1);
+		createImageVecs(world, dataset);
 	}
 	    	
 	@Override
@@ -92,59 +100,40 @@ public class imgclf extends NeurosomeFitnessFunction {
 	 	float hits = 0;
         float rawFit = -1;
         int errCount = 0;
-        List<Instance> images = dataset.getImages();
+
         boolean[][] results = new boolean[(int) ((RockSackWorld)world).MaxSteps][(int) ((RockSackWorld)world).TestsPerStep];
         
 	    for(int test = 0; test < ((RockSackWorld)world).TestsPerStep ; test++) {
 	    	for(int step = 0; step < ((RockSackWorld)world).MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
-	    		Instance img = images.get(step);
-	    		Plate[] plates = instanceToPlate(img);
-	    		double[] d = packPlates(Arrays.asList(plates));
-	    		/*
-	    		float[] inFloat = new float[img.getWidth()*img.getHeight()];
-	    		int[] dstBuff = new int[img.getWidth()*img.getHeight()];
-	    		Instance.readLuminance(img.getImage(), dstBuff);
-	    		int i = 0;
-	    		for (int row = 0; row < img.getHeight(); ++row) {
-	    			for (int col = 0; col < img.getWidth(); ++col) {
-	    				inFloat[i] = ((float)dstBuff[i]) / 255.0f;
-		    			//System.out.println(i+"="+inFloat[i]);
-		    			++i;
-	    			}
-
-	    		}
-	    		*/
-	    		float[] inFloat = new float[d.length];
-	    		for(int i = 0; i < d.length; i++)
-	    			inFloat[i] = (float) d[i];
-	    		float[] outNeuro = ind.execute(inFloat);
-	    		String predicted = classify(img, outNeuro);
-	    		if (!predicted.equals(img.getLabel())) {
+	    		float[] outNeuro = ind.execute(imageVecs[step]);
+	    		String predicted = classify(outNeuro);
+	    		if (!predicted.equals(imageLabels[step])) {
 	    			errCount++;
 	    		} else {
 	    			++hits;
 	    			results[step][test] = true;
 	    		}
 	    	}
-	      }
+	    }
 		if(World.SHOWTRUTH)
-			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/dataset.getSize())*100+"%"/*"Input "+img.toString()+*/);
-         //if( al.data.size() == 1 && ((Strings)(al.data.get(0))).data.equals("d")) hits = 10; // test
+			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/datasetSize)*100+"%");
          rawFit = (((RockSackWorld)world).MinRawFitness - hits);
-         // The SHOWTRUTH flag is set on best individual during run. We make sure to 
-         // place the checkAndStore inside the SHOWTRUTH block to ensure we only attempt to process
-         // the best individual, and this is what occurs in the showTruth method
-         if(.8 <= (hits/dataset.getSize()))
+         // break at predetermined accuracy level? adjust rawfit to 0 on that mark
+         // MaxSteps * TestsPerStep is MinRawFitness. hits / MinRawFitness  = percentage passed
+         if( breakOnAccuracyPercentage > 0 && (hits/((RockSackWorld)world).MinRawFitness) >= breakOnAccuracyPercentage) {
         	 rawFit = 0;
-         ((RockSackWorld)world).showTruth((Neurosome) ind, rawFit, results);
-         // break at 80% success
+        	 ((RockSackWorld)world).showTruth((NeurosomeInterface) ind, rawFit, results);
+        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage+"% equaled/surpassed by "+(hits/((RockSackWorld)world).MinRawFitness)+"%, adjusted raw fitness to zero.");
+         } else {
+             ((RockSackWorld)world).showTruth((NeurosomeInterface) ind, rawFit, results);
+         }
          return rawFit;
 	}
 
 	
 	/** Returns the predicted label for the image. */
-	public static String classify(Instance img, float[] probs) {
+	public static String classify(float[] probs) {
 		double maxProb = -1;
 		int bestIndex = -1;
 		for (int i = 0; i < probs.length; i++) {
@@ -160,18 +149,22 @@ public class imgclf extends NeurosomeFitnessFunction {
 	
 	private static Plate[] instanceToPlate(Instance instance) {
 			return new Plate[] {
-					new Plate(intImgToDoubleImg(instance.getRedChannel())),
-					new Plate(intImgToDoubleImg(instance.getBlueChannel())),
-					new Plate(intImgToDoubleImg(instance.getGreenChannel())),
+					//new Plate(intImgToDoubleImg(instance.getRedChannel())),
+					//new Plate(intImgToDoubleImg(instance.getBlueChannel())),
+					//new Plate(intImgToDoubleImg(instance.getGreenChannel())),
 					new Plate(intImgToDoubleImg(instance.getGrayImage())),
 			};
 	}
-	
+	/**
+	 * Scale the integer image channel which is byte 0-255 to double 0 to 1 range
+	 * @param intImg
+	 * @return
+	 */
 	private static double[][] intImgToDoubleImg(int[][] intImg) {
 		double[][] dblImg = new double[intImg.length][intImg[0].length];
 		for (int i = 0; i < dblImg.length; i++) {
 			for (int j = 0; j < dblImg[i].length; j++) {
-				dblImg[i][j] = ((double) 255 - intImg[i][j]) / 255;
+				dblImg[i][j] = ((double)(255 - intImg[i][j])) / ((double)255);
 			}
 		}
 		return dblImg;
@@ -194,6 +187,36 @@ public class imgclf extends NeurosomeFitnessFunction {
 					flattenedPlateSize);
 		}
 		return result;
+	}
+	
+	private static void createImageVecs(World world, Dataset dataset) {
+	    imageVecs = new float[(int)((RockSackWorld)world).MaxSteps][];
+	    imageLabels = new String[(int)((RockSackWorld)world).MaxSteps];
+	    List<Instance> images = dataset.getImages();
+    	for(int step = 0; step < ((RockSackWorld)world).MaxSteps; step++) {
+    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
+    		Instance img = images.get(step);
+    		Plate[] plates = instanceToPlate(img);
+    		double[] d = packPlates(Arrays.asList(plates));
+    		/*
+    		float[] inFloat = new float[img.getWidth()*img.getHeight()];
+    		int[] dstBuff = new int[img.getWidth()*img.getHeight()];
+    		Instance.readLuminance(img.getImage(), dstBuff);
+    		int i = 0;
+    		for (int row = 0; row < img.getHeight(); ++row) {
+    			for (int col = 0; col < img.getWidth(); ++col) {
+    				inFloat[i] = ((float)dstBuff[i]) / 255.0f;
+	    			//System.out.println(i+"="+inFloat[i]);
+	    			++i;
+    			}
+    		}
+    		float[] inFloat = new float[d.length];
+    		*/
+    		imageLabels[step] = img.getLabel();
+    		imageVecs[step] = new float[d.length];
+    		for(int i = 0; i < d.length; i++)
+    			imageVecs[step][i] = (float) d[i];
+    	}
 	}
 	
 }
