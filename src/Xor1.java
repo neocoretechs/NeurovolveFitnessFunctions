@@ -23,11 +23,13 @@ public class Xor1 extends NeurosomeFitnessFunction {
 	// x1, x2 x 4, 2 inputs 4 values to xor
 	public final Object[][] seeds = {{new False(),new False()},{new False(),new True()},{new True(),new False()},{new True(), new True()}};
 	final float[][] targs = {{0f,.01f},{.99f,1.0f},{.99f,1.0f},{0f,.01f}};
+	RelatrixWorld worldCast;
 	/**
 	 * @param guid
 	 */
 	public Xor1(World w, String guid) {
 		super(w, guid);
+		worldCast = (RelatrixWorld) w;
 	}
 	/**
 	 * @param argTypes
@@ -35,6 +37,7 @@ public class Xor1 extends NeurosomeFitnessFunction {
 	 */
 	public Xor1(World w) {
 		super(w);
+		worldCast = (RelatrixWorld) w;
 	}
 
 	/**
@@ -47,14 +50,16 @@ public class Xor1 extends NeurosomeFitnessFunction {
 	     *
 	     */     
 	public Object execute(NeurosomeInterface ind) {
+		//Long tim = System.currentTimeMillis();
+		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
 		    	 	 float hits = 0;
 		             float rawFit = -1;
 
 		             Object[] arg = new Object[1];
-		             boolean[][] results = new boolean[(int)((RockSackWorld)world).MaxSteps][(int) ((RockSackWorld)world).TestsPerStep];
+		             boolean[][] results = new boolean[(int)(worldCast.MaxSteps)][(int) (worldCast.TestsPerStep)];
 		            
-				     for(int test = 0; test <((RockSackWorld)world).TestsPerStep ; test++) {
-				    	for(int step = 0; step < ((RockSackWorld)world).MaxSteps; step++) {
+				     for(int test = 0; test <((RelatrixWorld)world).TestsPerStep ; test++) {
+				    	for(int step = 0; step < worldCast.MaxSteps; step++) {
 				    		float[] res = (float[]) ind.execute(seeds[step]);
 				    		if(World.SHOWTRUTH)
 				    			System.out.println("ind:"+ind+" seeds["+step+"]="+seeds[step][0]+","+seeds[step][1]+" targs:"+targs[step][0]+","+targs[step][1]+" res:"+Arrays.toString(res));
@@ -66,13 +71,14 @@ public class Xor1 extends NeurosomeFitnessFunction {
 				      }
 				      
 		             //if( al.data.size() == 1 && ((Strings)(al.data.get(0))).data.equals("d")) hits = 10; // test
-		             rawFit = (((RockSackWorld)world).MinRawFitness - hits);
+		             rawFit = worldCast.MinRawFitness - hits;
 		             // The SHOWTRUTH flag is set on best individual during run. We make sure to 
 		             // place the checkAndStore inside the SHOWTRUTH block to ensure we only attempt to process
 		             // the best individual, and this is what occurs in the showTruth method
-		             ((RockSackWorld)world).showTruth(ind, rawFit, results);
-		             
+		             worldCast.showTruth(ind, rawFit, results);
+		        	 //System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
 		             return rawFit;
+		             
 		     }
 		     
 		public static float sigDer(float s) {

@@ -96,7 +96,8 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    	
 	@Override
 	public Object execute(NeurosomeInterface ind) {
-			
+		Long tim = System.currentTimeMillis();
+		System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
 	 	float hits = 0;
         float rawFit = -1;
         int errCount = 0;
@@ -117,17 +118,18 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    	}
 	    }
 		if(World.SHOWTRUTH)
-			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/datasetSize)*100+"%");
+			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/((RockSackWorld)world).MinRawFitness)*100+"%");
          rawFit = (((RockSackWorld)world).MinRawFitness - hits);
          // break at predetermined accuracy level? adjust rawfit to 0 on that mark
          // MaxSteps * TestsPerStep is MinRawFitness. hits / MinRawFitness  = percentage passed
          if( breakOnAccuracyPercentage > 0 && (hits/((RockSackWorld)world).MinRawFitness) >= breakOnAccuracyPercentage) {
         	 rawFit = 0;
         	 ((RockSackWorld)world).showTruth((NeurosomeInterface) ind, rawFit, results);
-        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage+"% equaled/surpassed by "+(hits/((RockSackWorld)world).MinRawFitness)+"%, adjusted raw fitness to zero.");
+        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/((RockSackWorld)world).MinRawFitness)*100+"%, adjusted raw fitness to zero.");
          } else {
              ((RockSackWorld)world).showTruth((NeurosomeInterface) ind, rawFit, results);
          }
+     	 System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
          return rawFit;
 	}
 
