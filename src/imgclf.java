@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import com.neocoretechs.neurovolve.NeurosomeInterface;
+import com.neocoretechs.neurovolve.activation.SoftMax;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
 import com.neocoretechs.neurovolve.worlds.RockSackWorld;
 import com.neocoretechs.neurovolve.worlds.World;
@@ -91,8 +92,8 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    	
 	@Override
 	public Object execute(NeurosomeInterface ind) {
-		Long tim = System.currentTimeMillis();
-		System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
+		//Long tim = System.currentTimeMillis();
+		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
 	 	float hits = 0;
         float rawFit = -1;
         int errCount = 0;
@@ -105,6 +106,8 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    		float[] outNeuro = ind.execute(imageVecs[step]);
 	    		String predicted = classify(outNeuro);
 	    		if (!predicted.equals(imageLabels[step])) {
+	    			//if(predicted.equals("N/A"))
+	    				//System.out.println("ENCOUNTERED N/A AT INDEX:"+step+" FOR:"+imageLabels[step]);
 	    			errCount++;
 	    		} else {
 	    			++hits;
@@ -124,7 +127,7 @@ public class imgclf extends NeurosomeFitnessFunction {
          } else {
              world.showTruth(ind, rawFit, results);
          }
-     	 System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
+     	 //System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
          return rawFit;
 	}
 
@@ -133,9 +136,15 @@ public class imgclf extends NeurosomeFitnessFunction {
 	public static String classify(float[] probs) {
 		double maxProb = -1;
 		int bestIndex = -1;
+		double[] dprobs = new double[probs.length];
 		for (int i = 0; i < probs.length; i++) {
-			if (probs[i] > maxProb) {
-				maxProb = probs[i];
+			dprobs[i] = probs[i];
+		}
+		SoftMax sf = new SoftMax(dprobs);
+		for (int i = 0; i < probs.length; i++) {
+			float smax = sf.activate(probs[i]);
+			if (smax > maxProb) {
+				maxProb = smax;
 				bestIndex = i;
 			}
 		}
