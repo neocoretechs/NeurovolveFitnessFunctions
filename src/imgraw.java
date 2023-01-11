@@ -1,10 +1,7 @@
 
-import static cnn.tools.Util.checkNotEmpty;
-
 import java.io.File;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import com.neocoretechs.neurovolve.NeurosomeInterface;
@@ -12,20 +9,14 @@ import com.neocoretechs.neurovolve.activation.SoftMax;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
 import com.neocoretechs.neurovolve.worlds.World;
 
-import cnn.components.Plate;
-import cnn.driver.Dataset;
-import cnn.driver.Instance;
-
-import cnn.tools.Util;
-
 /**
- * Fitness function to evolve image recognizer for imgclf datasets and perform same inference as
+ * Fitness function to evolve image recognizer for imgraw datasets and perform same inference as
  * backpropagated solver control instance.
  * Hardwire port 9010 on same remote node as properties file to retrieve images and send to neurovolve
  * @author Jonathan Groff (C) NeoCoreTechs 2022
  *
  */
-public class imgclf extends NeurosomeFitnessFunction {
+public class imgraw extends NeurosomeFitnessFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
 	private static boolean DEBUG = false;
 	private static String prefix = "D:/etc/images/trainset/";
@@ -55,7 +46,7 @@ public class imgclf extends NeurosomeFitnessFunction {
 	/**
 	 * @param guid
 	 */
-	public imgclf(World w, String guid) {
+	public imgraw(World w, String guid) {
 		super(w, guid);
 		this.world = w;
 		init();
@@ -64,13 +55,13 @@ public class imgclf extends NeurosomeFitnessFunction {
 	 * @param argTypes
 	 * @param returnType
 	 */
-	public imgclf(World w) {
+	public imgraw(World w) {
 		super(w);
 		this.world = w;
 		init();
 	}
 
-	public imgclf() {}
+	public imgraw() {}
 	
 	public void init() {
 
@@ -78,7 +69,7 @@ public class imgclf extends NeurosomeFitnessFunction {
 		//	throw new Exception("Usage:java Infer <LocalIP Client> <Remote IpServer> <DB Port> <GUID of Neurosome> <Image file or directory>");
 		//new RelatrixClient(args[0], args[1], Integer.parseInt(args[2]));
 		if(datasetSize == 0) {
-			Dataset dataset = Util.loadDataset(new File(prefix), null, false);
+			Dataset dataset = Dataset.loadDataset(new File(prefix), null, false);
 			datasetSize = dataset.getSize();
 			System.out.printf("Dataset from %s loaded with %d images%n", prefix, datasetSize);
 			// Construct a new world to spin up remote connection
@@ -148,72 +139,15 @@ public class imgclf extends NeurosomeFitnessFunction {
 		return categoryNames.get(bestIndex);
 	}
 	
-	private static Plate[] instanceToPlate(Instance instance) {
-			return new Plate[] {
-					//new Plate(intImgToDoubleImg(instance.getRedChannel())),
-					//new Plate(intImgToDoubleImg(instance.getBlueChannel())),
-					//new Plate(intImgToDoubleImg(instance.getGreenChannel())),
-					new Plate(intImgToDoubleImg(instance.getGrayImage())),
-			};
-	}
-	/**
-	 * Scale the integer image channel which is byte 0-255 to double 0 to 1 range
-	 * @param intImg
-	 * @return
-	 */
-	private static double[][] intImgToDoubleImg(int[][] intImg) {
-		double[][] dblImg = new double[intImg.length][intImg[0].length];
-		for (int i = 0; i < dblImg.length; i++) {
-			for (int j = 0; j < dblImg[i].length; j++) {
-				dblImg[i][j] = ((double)(255 - intImg[i][j])) / ((double)255);
-			}
-		}
-		return dblImg;
-	}
-	
-	/** 
-	 * Pack the plates into a single, 1D double array. Used to connect the plate layers
-	 * with the fully connected layers.
-	 */
-	private static double[] packPlates(List<Plate> plates) {
-		checkNotEmpty(plates, "Plates to pack", false);
-		int flattenedPlateSize = plates.get(0).getTotalNumValues();
-		double[] result = new double[flattenedPlateSize * plates.size()];
-		for (int i = 0; i < plates.size(); i++) {
-			System.arraycopy(
-					plates.get(i).as1DArray(),
-					0 /* Copy the whole flattened plate! */,
-					result,
-					i * flattenedPlateSize,
-					flattenedPlateSize);
-		}
-		return result;
-	}
-	
 	private static void createImageVecs(World world, Dataset dataset) {
 	    imageVecs = new double[(int)world.MaxSteps][];
 	    imageLabels = new String[(int)world.MaxSteps];
-	    List<Instance> images = dataset.getImages();
+	    List<RawInstance> images = dataset.getImages();
     	for(int step = 0; step < world.MaxSteps; step++) {
     		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
-    		Instance img = images.get(step);
-    		Plate[] plates = instanceToPlate(img);
-       		imageLabels[step] = img.getLabel();
-    		imageVecs[step] = packPlates(Arrays.asList(plates));
-    		/*
-    		float[] inFloat = new float[img.getWidth()*img.getHeight()];
-    		int[] dstBuff = new int[img.getWidth()*img.getHeight()];
-    		Instance.readLuminance(img.getImage(), dstBuff);
-    		int i = 0;
-    		for (int row = 0; row < img.getHeight(); ++row) {
-    			for (int col = 0; col < img.getWidth(); ++col) {
-    				inFloat[i] = ((float)dstBuff[i]) / 255.0f;
-	    			//System.out.println(i+"="+inFloat[i]);
-	    			++i;
-    			}
-    		}
-    		float[] inFloat = new float[d.length];
-    		*/
+    		RawInstance img = images.get(step);
+    		imageLabels[step] = img.getLabel();
+    		imageVecs[step] = img.getImage();
     	}
 	}
 	
