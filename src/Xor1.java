@@ -1,13 +1,11 @@
 import java.util.Arrays;
 
-import com.neocoretechs.neurovolve.Neurosome;
 import com.neocoretechs.neurovolve.NeurosomeInterface;
+import com.neocoretechs.neurovolve.fitnessfunctions.False;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
-import com.neocoretechs.neurovolve.worlds.RelatrixWorld;
-import com.neocoretechs.neurovolve.worlds.RockSackWorld;
+import com.neocoretechs.neurovolve.fitnessfunctions.True;
 import com.neocoretechs.neurovolve.worlds.World;
-import com.neocoretechs.volvex.functions.False;
-import com.neocoretechs.volvex.functions.True;
+
 
 /**
  * Fitness function for the Xor test expressed as a neural network evolving in the Neurovolve framework.
@@ -22,7 +20,7 @@ public class Xor1 extends NeurosomeFitnessFunction {
 	private static final long serialVersionUID = 3845408762831534097L;
 	// x1, x2 x 4, 2 inputs 4 values to xor
 	public final Object[][] seeds = {{new False(),new False()},{new False(),new True()},{new True(),new False()},{new True(), new True()}};
-	final float[][] targs = {{0f,.01f},{.99f,1.0f},{.99f,1.0f},{0f,.01f}};
+	final double[][] targs = {{0,.01},{.99,1.0},{.99,1.0},{0,.01}};
 	/**
 	 * @param guid
 	 */
@@ -57,7 +55,7 @@ public class Xor1 extends NeurosomeFitnessFunction {
 		            
 				     for(int test = 0; test < world.TestsPerStep ; test++) {
 				    	for(int step = 0; step < world.MaxSteps; step++) {
-				    		float[] res = (float[]) ind.execute(seeds[step]);
+				    		double[] res = (double[]) ind.execute(seeds[step]);
 				    		if(World.SHOWTRUTH)
 				    			System.out.println("ind:"+ind+" seeds["+step+"]="+seeds[step][0]+","+seeds[step][1]+" targs:"+targs[step][0]+","+targs[step][1]+" res:"+Arrays.toString(res));
 				    		if(res[0] >= targs[step][0] && res[0] <= targs[step][1]) {
@@ -78,8 +76,8 @@ public class Xor1 extends NeurosomeFitnessFunction {
 		             
 		     }
 		     
-		public static float sigDer(float s) {
-			return (float) ((float) (1.0/(1.0+Math.exp(-s))) * (1.0 -(1.0/(1.0+Math.exp(-s))))) ; //derivative of sigmoid function
+		public static double sigDer(double s) {
+			return  (1.0/(1.0+Math.exp(-s))) * (1.0 -(1.0/(1.0+Math.exp(-s)))) ; //derivative of sigmoid function
 		}
 
 }
