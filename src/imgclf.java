@@ -100,7 +100,7 @@ public class imgclf extends NeurosomeFitnessFunction {
         int errCount = 0;
 
         boolean[][] results = new boolean[(int)world.MaxSteps][(int)world.TestsPerStep];
-        double cost = -1;
+        double cost = 0;
 	    for(int test = 0; test < world.TestsPerStep ; test++) {
 	    	for(int step = 0; step < world.MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
@@ -123,6 +123,8 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    		}
 	    	}
 	    }
+	    if(cost < 0 || cost == Double.NEGATIVE_INFINITY || cost == Double.POSITIVE_INFINITY)
+	    	cost = Double.MAX_VALUE;
 		//double weightDecay = 0;
 		//for (int i = 0; i < weights[n].length; i++) {
 	      //for (int j = 0; j < weights[n][i].length; j++) {
