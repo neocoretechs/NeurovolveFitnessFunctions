@@ -47,8 +47,8 @@ public class Xor1 extends NeurosomeFitnessFunction {
 	public Object execute(NeurosomeInterface ind) {
 		//Long tim = System.currentTimeMillis();
 		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
-		    	 	 float hits = 0;
-		             float rawFit = -1;
+		    	 	 double hits = 0;
+		             double rawFit = -1;
 
 		             Object[] arg = new Object[1];
 		             boolean[][] results = new boolean[(int)world.MaxSteps][(int) world.TestsPerStep];
@@ -66,7 +66,7 @@ public class Xor1 extends NeurosomeFitnessFunction {
 				      }
 				      
 		             //if( al.data.size() == 1 && ((Strings)(al.data.get(0))).data.equals("d")) hits = 10; // test
-		             rawFit = world.MinRawFitness - hits;
+		             rawFit = world.MinCost - hits;
 		             // The SHOWTRUTH flag is set on best individual during run. We make sure to 
 		             // place the checkAndStore inside the SHOWTRUTH block to ensure we only attempt to process
 		             // the best individual, and this is what occurs in the showTruth method

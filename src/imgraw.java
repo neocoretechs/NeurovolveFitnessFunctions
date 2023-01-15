@@ -84,8 +84,8 @@ public class imgraw extends NeurosomeFitnessFunction {
 	public Object execute(NeurosomeInterface ind) {
 		//Long tim = System.currentTimeMillis();
 		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
-	 	float hits = 0;
-        float rawFit = -1;
+	 	double hits = 0;
+        double rawFit = -1;
         int errCount = 0;
 
         boolean[][] results = new boolean[(int)world.MaxSteps][(int)world.TestsPerStep];
@@ -106,14 +106,14 @@ public class imgraw extends NeurosomeFitnessFunction {
 	    	}
 	    }
 		if(World.SHOWTRUTH)
-			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/world.MinRawFitness)*100+"%");
-         rawFit = world.MinRawFitness - hits;
+			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/world.MinCost)*100+"%");
+         rawFit = world.MinCost - hits;
          // break at predetermined accuracy level? adjust rawfit to 0 on that mark
          // MaxSteps * TestsPerStep is MinRawFitness. hits / MinRawFitness  = percentage passed
-         if( breakOnAccuracyPercentage > 0 && (hits/world.MinRawFitness) >= breakOnAccuracyPercentage) {
+         if( breakOnAccuracyPercentage > 0 && (hits/world.MinCost) >= breakOnAccuracyPercentage) {
         	 rawFit = 0;
         	 world.showTruth(ind, rawFit, results);
-        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/world.MinRawFitness)*100+"%, adjusted raw fitness to zero.");
+        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/world.MinCost)*100+"%, adjusted raw fitness to zero.");
          } else {
              world.showTruth(ind, rawFit, results);
          }

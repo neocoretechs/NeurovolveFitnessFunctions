@@ -90,23 +90,32 @@ public class imgclf extends NeurosomeFitnessFunction {
 	}
 	    	
 	@Override
+	/**
+	 * Compute cross entropy loss, return cost
+	 */
 	public Object execute(NeurosomeInterface ind) {
 		//Long tim = System.currentTimeMillis();
 		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
 	 	float hits = 0;
-        float rawFit = -1;
         int errCount = 0;
 
         boolean[][] results = new boolean[(int)world.MaxSteps][(int)world.TestsPerStep];
-        
+        double cost = -1;
 	    for(int test = 0; test < world.TestsPerStep ; test++) {
 	    	for(int step = 0; step < world.MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
-	    		double[] outNeuro = ind.execute(imageVecs[step]);
-	    		String predicted = classify(outNeuro);
-	    		if (!predicted.equals(imageLabels[step])) {
-	    			//if(predicted.equals("N/A"))
-	    				//System.out.println("ENCOUNTERED N/A AT INDEX:"+step+" FOR:"+imageLabels[step]);
+	    		double[] outVec = ind.execute(imageVecs[step]);
+	    		double[] actual = softMax(outVec);
+	    		// expected is one-hot encoded for class
+	    		double expected = 0;
+	    		for(int j = 0; j < actual.length; j++) {
+	    			expected = categoryNames.get(j).equals(imageLabels[step]) ? 1 : 0;
+	    			cost += -(expected * Math.log(actual[j]) + (1 - expected) * Math.log(1 - actual[j]));
+	    		}
+	    		String predicted = classify(outVec);
+	    		if(!predicted.equals(imageLabels[step])) {
+	    			if(predicted.equals("N/A"))
+	    				System.out.println("ENCOUNTERED N/A AT INDEX:"+step+" FOR:"+imageLabels[step]);
 	    			errCount++;
 	    		} else {
 	    			++hits;
@@ -114,20 +123,29 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    		}
 	    	}
 	    }
+		//double weightDecay = 0;
+		//for (int i = 0; i < weights[n].length; i++) {
+	      //for (int j = 0; j < weights[n][i].length; j++) {
+	        //weightDecay += Math.pow(weights[n][i][j], 2);
+	      //}
+		//}
+		//weightDecay *= weightDecayRate;
+		//cost += weightDecay;
+
 		if(World.SHOWTRUTH)
-			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/world.MinRawFitness)*100+"%");
-         rawFit = world.MinRawFitness - hits;
+			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/world.MinCost)*100+"%");
+         // rawFit = world.MinRawFitness - hits;
          // break at predetermined accuracy level? adjust rawfit to 0 on that mark
          // MaxSteps * TestsPerStep is MinRawFitness. hits / MinRawFitness  = percentage passed
-         if( breakOnAccuracyPercentage > 0 && (hits/world.MinRawFitness) >= breakOnAccuracyPercentage) {
-        	 rawFit = 0;
-        	 world.showTruth(ind, rawFit, results);
-        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/world.MinRawFitness)*100+"%, adjusted raw fitness to zero.");
+         if( breakOnAccuracyPercentage > 0 && (hits/(world.MaxSteps*world.TestsPerStep)) >= breakOnAccuracyPercentage) {
+        	 //cost = 0;
+        	 world.showTruth(ind, cost, results);
+        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/(world.MaxSteps*world.TestsPerStep))*100+"%, adjusted cost to zero.");
          } else {
-             world.showTruth(ind, rawFit, results);
+             world.showTruth(ind, cost, results);
          }
      	 //System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
-         return rawFit;
+         return cost;
 	}
 
 	
@@ -146,6 +164,15 @@ public class imgclf extends NeurosomeFitnessFunction {
 		if(bestIndex == -1)
 			return "N/A";
 		return categoryNames.get(bestIndex);
+	}
+	
+	public static double[] softMax(double[] dprobs) {
+		SoftMax sf = new SoftMax(dprobs);
+		double[] smax = new double[dprobs.length];
+		for (int i = 0; i < dprobs.length; i++) {
+			smax[i] = sf.activate(dprobs[i]);		
+		}
+		return smax;
 	}
 	
 	private static Plate[] instanceToPlate(Instance instance) {
