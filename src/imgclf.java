@@ -105,6 +105,9 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    	for(int step = 0; step < world.MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
 	    		double[] outVec = ind.execute(imageVecs[step]);
+	    		for(int i = 0; i < outVec.length; i++)
+	    			if(Double.isNaN(outVec[i]))
+	    				outVec[i] = Double.MIN_VALUE;
 	    		double[] actual = softMax(outVec);
 	    		// expected is one-hot encoded for class
 	    		double expected = 0;
@@ -115,7 +118,7 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    		String predicted = classify(outVec);
 	    		if(!predicted.equals(imageLabels[step])) {
 	    			if(predicted.equals("N/A"))
-	    				System.out.println("ENCOUNTERED N/A AT INDEX:"+step+" FOR:"+imageLabels[step]+" "+ind+" "+Thread.currentThread().getName());
+	    				System.out.println("ENCOUNTERED N/A AT INDEX:"+step+" FOR:"+imageLabels[step]+" "+ind+" "+Thread.currentThread().getName()+" "+Arrays.toString(outVec));
 	    			errCount++;
 	    		} else {
 	    			++hits;
@@ -123,7 +126,7 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    		}
 	    	}
 	    }
-	    if(cost < 0 || cost == Double.NEGATIVE_INFINITY || cost == Double.POSITIVE_INFINITY || cost == Double.NaN)
+	    if(cost < 0 || Double.isInfinite(cost) || Double.isNaN(cost))
 	    	cost = Double.MAX_VALUE/2;
 		//double weightDecay = 0;
 		//for (int i = 0; i < weights[n].length; i++) {
@@ -158,6 +161,9 @@ public class imgclf extends NeurosomeFitnessFunction {
 		SoftMax sf = new SoftMax(dprobs);
 		for (int i = 0; i < dprobs.length; i++) {
 			double smax = sf.activate(dprobs[i]);
+			// normalize
+			if(smax < 0 || Double.isNaN(smax))
+				smax = Double.MIN_VALUE;
 			if (smax > maxProb) {
 				maxProb = smax;
 				bestIndex = i;
@@ -172,7 +178,10 @@ public class imgclf extends NeurosomeFitnessFunction {
 		SoftMax sf = new SoftMax(dprobs);
 		double[] smax = new double[dprobs.length];
 		for (int i = 0; i < dprobs.length; i++) {
-			smax[i] = sf.activate(dprobs[i]);		
+			smax[i] = sf.activate(dprobs[i]);
+			// normalize
+			if(smax[i] < 0 || Double.isNaN(smax[i]))
+				smax[i] = Double.MIN_VALUE;
 		}
 		return smax;
 	}
