@@ -115,7 +115,7 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    		String predicted = classify(outVec);
 	    		if(!predicted.equals(imageLabels[step])) {
 	    			if(predicted.equals("N/A"))
-	    				System.out.println("ENCOUNTERED N/A AT INDEX:"+step+" FOR:"+imageLabels[step]);
+	    				System.out.println("ENCOUNTERED N/A AT INDEX:"+step+" FOR:"+imageLabels[step]+" "+ind+" "+Thread.currentThread().getName());
 	    			errCount++;
 	    		} else {
 	    			++hits;
@@ -123,8 +123,8 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    		}
 	    	}
 	    }
-	    if(cost < 0 || cost == Double.NEGATIVE_INFINITY || cost == Double.POSITIVE_INFINITY)
-	    	cost = Double.MAX_VALUE;
+	    if(cost < 0 || cost == Double.NEGATIVE_INFINITY || cost == Double.POSITIVE_INFINITY || cost == Double.NaN)
+	    	cost = Double.MAX_VALUE/2;
 		//double weightDecay = 0;
 		//for (int i = 0; i < weights[n].length; i++) {
 	      //for (int j = 0; j < weights[n][i].length; j++) {
