@@ -128,14 +128,8 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    }
 	    if(cost < 0 || Double.isInfinite(cost) || Double.isNaN(cost))
 	    	cost = Double.MAX_VALUE/2;
-		//double weightDecay = 0;
-		//for (int i = 0; i < weights[n].length; i++) {
-	      //for (int j = 0; j < weights[n][i].length; j++) {
-	        //weightDecay += Math.pow(weights[n][i][j], 2);
-	      //}
-		//}
-		//weightDecay *= weightDecayRate;
-		//cost += weightDecay;
+
+	    cost = ind.weightDecay(cost, .00001);
 
 		if(World.SHOWTRUTH)
 			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/world.MinCost)*100+"%");
