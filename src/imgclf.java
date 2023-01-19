@@ -10,6 +10,7 @@ import java.util.List;
 import com.neocoretechs.neurovolve.NeurosomeInterface;
 import com.neocoretechs.neurovolve.activation.SoftMax;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
+import com.neocoretechs.neurovolve.relatrix.Storage;
 import com.neocoretechs.neurovolve.worlds.World;
 
 import cnn.components.Plate;
@@ -29,9 +30,9 @@ public class imgclf extends NeurosomeFitnessFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
 	private static boolean DEBUG = false;
 	private static String prefix = "D:/etc/images/trainset/";
-    private static Object mutex = new Object();
+    //private static Object mutex = new Object();
     private World world;
-    private static float breakOnAccuracyPercentage = .8f; // set to 0 for 100% accuracy expected
+    private static float breakOnAccuracyPercentage = .7f; // set to 0 for 100% accuracy expected
 	//Dataset dataset;
 	// We'll hardwire these in, but more robust code would not do so.
 	private static enum Category {
@@ -105,9 +106,9 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    	for(int step = 0; step < world.MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
 	    		double[] outVec = ind.execute(imageVecs[step]);
-	    		for(int i = 0; i < outVec.length; i++)
-	    			if(Double.isNaN(outVec[i]))
-	    				outVec[i] = Double.MIN_VALUE;
+	    		//for(int i = 0; i < outVec.length; i++)
+	    			//if(Double.isNaN(outVec[i]))
+	    				//outVec[i] = Double.MIN_VALUE;
 	    		double[] actual = softMax(outVec);
 	    		// expected is one-hot encoded for class
 	    		double expected = 0;
@@ -117,8 +118,8 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    		}
 	    		String predicted = classify(outVec);
 	    		if(!predicted.equals(imageLabels[step])) {
-	    			if(predicted.equals("N/A"))
-	    				System.out.println("ENCOUNTERED N/A AT INDEX:"+step+" FOR:"+imageLabels[step]+" "+ind+" "+Thread.currentThread().getName()+" "+Arrays.toString(outVec));
+	    			//if(predicted.equals("N/A"))
+	    				//System.out.println("ENCOUNTERED N/A AT INDEX:"+step+" FOR:"+imageLabels[step]+" "+ind+" "+Thread.currentThread().getName()+" "+Arrays.toString(outVec));
 	    			errCount++;
 	    		} else {
 	    			++hits;
@@ -126,10 +127,10 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    		}
 	    	}
 	    }
-	    if(cost < 0 || Double.isInfinite(cost) || Double.isNaN(cost))
+	    if(/*cost < 0 || Double.isInfinite(cost) ||*/ Double.isNaN(cost))
 	    	cost = Double.MAX_VALUE/2;
 
-	    cost = ind.weightDecay(cost, .00001);
+	    //cost = ind.weightDecay(cost, .00001);
 
 		if(World.SHOWTRUTH)
 			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/world.MinCost)*100+"%");
@@ -137,9 +138,11 @@ public class imgclf extends NeurosomeFitnessFunction {
          // break at predetermined accuracy level? adjust rawfit to 0 on that mark
          // MaxSteps * TestsPerStep is MinRawFitness. hits / MinRawFitness  = percentage passed
          if( breakOnAccuracyPercentage > 0 && (hits/(world.MaxSteps*world.TestsPerStep)) >= breakOnAccuracyPercentage) {
-        	 //cost = 0;
         	 world.showTruth(ind, cost, results);
-        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/(world.MaxSteps*world.TestsPerStep))*100+"%, adjusted cost to zero.");
+        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/(world.MaxSteps*world.TestsPerStep))*100+"%.");
+        	 if(world.getRemoteStorageClient() != null) {
+        		 Storage.storeSolver(world.getRemoteStorageClient(), ind);
+        	 }
          } else {
              world.showTruth(ind, cost, results);
          }
@@ -156,8 +159,8 @@ public class imgclf extends NeurosomeFitnessFunction {
 		for (int i = 0; i < dprobs.length; i++) {
 			double smax = sf.activate(dprobs[i]);
 			// normalize
-			if(smax < 0 || Double.isNaN(smax))
-				smax = Double.MIN_VALUE;
+			//if(smax < 0 || Double.isNaN(smax))
+				//smax = Double.MIN_VALUE;
 			if (smax > maxProb) {
 				maxProb = smax;
 				bestIndex = i;
@@ -174,8 +177,8 @@ public class imgclf extends NeurosomeFitnessFunction {
 		for (int i = 0; i < dprobs.length; i++) {
 			smax[i] = sf.activate(dprobs[i]);
 			// normalize
-			if(smax[i] < 0 || Double.isNaN(smax[i]))
-				smax[i] = Double.MIN_VALUE;
+			//if(smax[i] < 0 || Double.isNaN(smax[i]))
+				//smax[i] = Double.MIN_VALUE;
 		}
 		return smax;
 	}
