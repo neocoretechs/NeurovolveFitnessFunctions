@@ -2,7 +2,7 @@
 import static cnn.tools.Util.checkNotEmpty;
 
 import java.io.File;
-
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -10,8 +10,12 @@ import java.util.List;
 import com.neocoretechs.neurovolve.NeurosomeInterface;
 import com.neocoretechs.neurovolve.activation.SoftMax;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
+import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeTransferFunction;
+import com.neocoretechs.neurovolve.relatrix.ArgumentInstances;
 import com.neocoretechs.neurovolve.relatrix.Storage;
 import com.neocoretechs.neurovolve.worlds.World;
+import com.neocoretechs.relatrix.DuplicateKeyException;
+import com.neocoretechs.relatrix.client.RelatrixClient;
 
 import cnn.components.Plate;
 import cnn.driver.Dataset;
@@ -26,12 +30,11 @@ import cnn.tools.Util;
  * @author Jonathan Groff (C) NeoCoreTechs 2022
  *
  */
-public class imgclf extends NeurosomeFitnessFunction {
+public class imgclf extends NeurosomeTransferFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
 	private static boolean DEBUG = false;
 	private static String prefix = "D:/etc/images/trainset/";
     //private static Object mutex = new Object();
-    private World world;
     private static float breakOnAccuracyPercentage = .7f; // set to 0 for 100% accuracy expected
 	//Dataset dataset;
 	// We'll hardwire these in, but more robust code would not do so.
@@ -56,18 +59,8 @@ public class imgclf extends NeurosomeFitnessFunction {
 	/**
 	 * @param guid
 	 */
-	public imgclf(World w, String guid) {
-		super(w, guid);
-		this.world = w;
-		init();
-	}
-	/**
-	 * @param argTypes
-	 * @param returnType
-	 */
-	public imgclf(World w) {
-		super(w);
-		this.world = w;
+	public imgclf(NeurosomeInterface ni) {
+		super(ni);
 		init();
 	}
 
@@ -85,8 +78,8 @@ public class imgclf extends NeurosomeFitnessFunction {
 			// Construct a new world to spin up remote connection
 			//categoryNames.get(index).getName() is category
 			// MinRawFitness is steps * testPerStep args one and two of setStepFactors
-			world.setStepFactors((float)datasetSize, 1.0f);
-			createImageVecs(world, dataset);
+			ind.getPopulation().getWorld().setStepFactors((float)datasetSize, 1.0f);
+			createImageVecs(ind.getPopulation().getWorld(), dataset);
 		}
 	}
 	    	
@@ -94,16 +87,16 @@ public class imgclf extends NeurosomeFitnessFunction {
 	/**
 	 * Compute cross entropy loss, return cost
 	 */
-	public Object execute(NeurosomeInterface ind) {
+	public Object execute() {
 		//Long tim = System.currentTimeMillis();
 		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
 	 	float hits = 0;
         int errCount = 0;
 
-        boolean[][] results = new boolean[(int)world.MaxSteps][(int)world.TestsPerStep];
+        boolean[][] results = new boolean[(int)ind.getPopulation().getWorld().MaxSteps][(int)ind.getPopulation().getWorld().TestsPerStep];
         double cost = 0;
-	    for(int test = 0; test < world.TestsPerStep ; test++) {
-	    	for(int step = 0; step < world.MaxSteps; step++) {
+	    for(int test = 0; test < ind.getPopulation().getWorld().TestsPerStep ; test++) {
+	    	for(int step = 0; step < ind.getPopulation().getWorld().MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
 	    		double[] outVec = ind.execute(imageVecs[step]);
 	    		//for(int i = 0; i < outVec.length; i++)
@@ -133,18 +126,15 @@ public class imgclf extends NeurosomeFitnessFunction {
 	    //cost = ind.weightDecay(cost, .00001);
 
 		if(World.SHOWTRUTH)
-			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/world.MinCost)*100+"%");
+			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/ind.getPopulation().getWorld().MinCost)*100+"%");
          // rawFit = world.MinRawFitness - hits;
          // break at predetermined accuracy level? adjust rawfit to 0 on that mark
          // MaxSteps * TestsPerStep is MinRawFitness. hits / MinRawFitness  = percentage passed
-         if( breakOnAccuracyPercentage > 0 && (hits/(world.MaxSteps*world.TestsPerStep)) >= breakOnAccuracyPercentage) {
-        	 world.showTruth(ind, cost, results);
-        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/(world.MaxSteps*world.TestsPerStep))*100+"%.");
-        	 if(world.getRemoteStorageClient() != null) {
-        		 Storage.storeSolver(world.getRemoteStorageClient(), ind);
-        	 }
+         if( breakOnAccuracyPercentage > 0 && (hits/(ind.getPopulation().getWorld().MaxSteps*ind.getPopulation().getWorld().TestsPerStep)) >= breakOnAccuracyPercentage) {
+        	 ind.getPopulation().getWorld().showTruth(ind, cost, results);
+        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/(ind.getPopulation().getWorld().MaxSteps*ind.getPopulation().getWorld().TestsPerStep))*100+"%.");
          } else {
-             world.showTruth(ind, cost, results);
+        	 ind.getPopulation().getWorld().showTruth(ind, cost, results);
          }
      	 //System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
          return cost;
@@ -250,6 +240,29 @@ public class imgclf extends NeurosomeFitnessFunction {
     		float[] inFloat = new float[d.length];
     		*/
     	}
+	}
+	
+	@Override
+	/**
+	 * Generates transfer learning multi task data.
+	 * Reads guid Neurosome from db ri, generates output from dataset, writes each output vector to db ro
+	 */
+	public void transfer(RelatrixClient ro) {
+		for (int step = 0; step < imageVecs.length; step++) {
+			double[] outNeuro = ind.execute(imageVecs[step]);
+			//System.out.println(/*"Input "+img.toString()+*/" Output:"+Arrays.toString(outNeuro));
+			Object[] o = new Object[outNeuro.length];
+			for(int i = 0; i < outNeuro.length; i++) {
+				o[i] = new Double(outNeuro[i]);
+			}
+			ArgumentInstances ai = new ArgumentInstances(o);
+			try {
+				ro.store(ind.getRepresentation(), imageLabels[step], ai);
+				System.out.println(imageLabels[step]+" Stored!");
+			} catch (IllegalAccessException | IOException | DuplicateKeyException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 	
 }

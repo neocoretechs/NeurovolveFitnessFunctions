@@ -46,19 +46,8 @@ public class imgraw extends NeurosomeFitnessFunction {
 	/**
 	 * @param guid
 	 */
-	public imgraw(World w, String guid) {
-		super(w, guid);
-		this.world = w;
-		init();
-	}
-	/**
-	 * @param argTypes
-	 * @param returnType
-	 */
-	public imgraw(World w) {
-		super(w);
-		this.world = w;
-		init();
+	public imgraw(NeurosomeInterface ni) {
+		super(ni);
 	}
 
 	public imgraw() {}
@@ -81,7 +70,7 @@ public class imgraw extends NeurosomeFitnessFunction {
 	}
 	    	
 	@Override
-	public Object execute(NeurosomeInterface ind) {
+	public Object execute() {
 		//Long tim = System.currentTimeMillis();
 		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
 	 	double hits = 0;

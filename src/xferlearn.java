@@ -8,12 +8,15 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
+import com.neocoretechs.neurovolve.NeuralNet;
+import com.neocoretechs.neurovolve.Neurosome;
 import com.neocoretechs.neurovolve.NeurosomeInterface;
 import com.neocoretechs.neurovolve.activation.SoftMax;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
 import com.neocoretechs.neurovolve.relatrix.Storage;
 import com.neocoretechs.neurovolve.relatrix.ArgumentInstances;
 import com.neocoretechs.neurovolve.worlds.World;
+import com.neocoretechs.relatrix.DuplicateKeyException;
 import com.neocoretechs.relatrix.client.RelatrixClient;
 import com.neocoretechs.relatrix.client.RemoteStream;
 
@@ -34,7 +37,7 @@ public class xferlearn extends NeurosomeFitnessFunction {
 	private static String prefix = "D:/etc/images/trainset/";
 	private static String localNode = "COREPLEX";
 	private static String remoteNode = "COREPLEX";
-	private static String sguid = "060ec979-67aa-4c50-948f-0a861d1625a0";
+	private static String sguid;
 	private static int dbPort = 9020;
     //private static Object mutex = new Object();
     private World world;
@@ -63,18 +66,8 @@ public class xferlearn extends NeurosomeFitnessFunction {
 	/**
 	 * @param guid
 	 */
-	public xferlearn(World w, String guid) {
-		super(w, guid);
-		this.world = w;
-		init();
-	}
-	/**
-	 * @param argTypes
-	 * @param returnType
-	 */
-	public xferlearn(World w) {
-		super(w);
-		this.world = w;
+	public xferlearn(NeurosomeInterface ni) {
+		super(ni);
 		init();
 	}
 
@@ -122,7 +115,7 @@ public class xferlearn extends NeurosomeFitnessFunction {
 	/**
 	 * Compute cross entropy loss, return cost
 	 */
-	public Object execute(NeurosomeInterface ind) {
+	public Object execute() {
 		//Long tim = System.currentTimeMillis();
 		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
 	 	float hits = 0;
@@ -278,6 +271,46 @@ public class xferlearn extends NeurosomeFitnessFunction {
     		float[] inFloat = new float[d.length];
     		*/
     	}
+	}
+	
+	/**
+	 * Generates transfer learning multi task data.
+	 * Reads guid Neurosome from db ri, generates output from dataset, writes each output vector to db ro
+	 * @throws IOException 
+	 * @throws IllegalAccessException 
+	 * @throws ClassNotFoundException 
+	 * @throws IllegalArgumentException 
+	 */
+	public static double testData(RelatrixClient ri, RelatrixClient ro, NeurosomeInterface ni, boolean verbose) throws IllegalArgumentException, ClassNotFoundException, IllegalAccessException, IOException {
+		int errCount = 0;
+		for(int j = 0; j < imageLabels.length; j++) {
+			double[] outNeuro = ni.execute(imageVecs[j]);
+			System.out.println(/*"Input "+img.toString()+*/" Output:"+Arrays.toString(outNeuro));
+			Object[] o = new Object[outNeuro.length];
+			for(int i = 0; i < outNeuro.length; i++) {
+				o[i] = new Double(outNeuro[i]);
+			}
+			ArgumentInstances ai = new ArgumentInstances(o);
+			try {
+				ro.store(ni.getRepresentation(), imageLabels[j], ai);
+				System.out.println(imageLabels[j]+" Stored!");
+			} catch (IllegalAccessException | IOException | DuplicateKeyException e) {
+				e.printStackTrace();
+			}
+			String predicted = classify(outNeuro);
+			if (!predicted.equals(imageLabels[j])) {
+				errCount++;
+			}	
+			if (verbose) {
+				System.out.printf("Predicted: %s\t\tActual:%s\n", predicted, imageLabels[j]);
+			}
+		}
+		
+		double accuracy = ((double) (imageLabels.length - errCount)) / imageLabels.length;
+		if (verbose) {
+			System.out.printf("Final accuracy was %.9f\n", accuracy);
+		}
+		return accuracy;
 	}
 	
 }
