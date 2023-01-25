@@ -48,15 +48,15 @@ public class StereoImage extends NeurosomeFitnessFunction {
 	/**
 	 * @param guid
 	 */
-	public StereoImage(NeurosomeInterface ni) {
-		super(ni);
+	public StereoImage(World w) {
+		super(w);
 	}
 
 
 	public StereoImage() {}
 	    	
 	@Override
-	public Object execute() {
+	public Object execute(NeurosomeInterface ind) {
 		try {
 			rkvc = new RelatrixClient(LoadProperties.slocallIP, LoadProperties.sremoteIp, 9020);
 		} catch (IOException e2) {
@@ -99,12 +99,12 @@ public class StereoImage extends NeurosomeFitnessFunction {
          double rawFit = -1;
 
          Object[] arg = new Object[1];
-         boolean[][] results = new boolean[(int)ind.getPopulation().getWorld().MaxSteps][(int)ind.getPopulation().getWorld().TestsPerStep];
+         boolean[][] results = new boolean[(int)getWorld().MaxSteps][(int)getWorld().TestsPerStep];
         
-	     for(int test = 0; test < ind.getPopulation().getWorld().TestsPerStep ; test++) {
-	    	for(int step = 0; step < ind.getPopulation().getWorld().MaxSteps; step++) {
+	     for(int test = 0; test < getWorld().TestsPerStep ; test++) {
+	    	for(int step = 0; step < getWorld().MaxSteps; step++) {
 	    		float[] res = (float[]) ind.execute(seeds[step]);
-	    		if(World.SHOWTRUTH)
+	    		if(getWorld().SHOWTRUTH)
 	    			System.out.println("ind:"+ind+" seeds["+step+"]="+seeds[step][0]+","+seeds[step][1]+" targs:"+targs[step][0]+","+targs[step][1]+" res:"+res[0]);
 	    		if(res[0] >= targs[step][0] && res[0] <= targs[step][1]) {
 	    			++hits;
@@ -114,11 +114,11 @@ public class StereoImage extends NeurosomeFitnessFunction {
 	      }
 	      
          //if( al.data.size() == 1 && ((Strings)(al.data.get(0))).data.equals("d")) hits = 10; // test
-         rawFit = ind.getPopulation().getWorld().MinCost - hits;
+         rawFit = getWorld().MinCost - hits;
          // The SHOWTRUTH flag is set on best individual during run. We make sure to 
          // place the checkAndStore inside the SHOWTRUTH block to ensure we only attempt to process
          // the best individual, and this is what occurs in the showTruth method
-         ind.getPopulation().getWorld().showTruth(ind, rawFit, results);
+         getWorld().showTruth(ind, rawFit, results);
          
          return rawFit;
 	}

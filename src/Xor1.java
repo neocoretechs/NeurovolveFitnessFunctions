@@ -24,31 +24,23 @@ public class Xor1 extends NeurosomeFitnessFunction {
 	/**
 	 * @param guid
 	 */
-	public Xor1(NeurosomeInterface ni) {
-		super(ni);
+	public Xor1(World world) {
+		super(world);
 	}
 
-
-	/**
-	 * 
-	 */
 	public Xor1() {}
-	    
-	    
-	    /**
-	     *
-	     */     
-	public Object execute() {
+    
+	public Object execute(NeurosomeInterface ind) {
 		//Long tim = System.currentTimeMillis();
 		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
 		    	 	 double hits = 0;
 		             double rawFit = -1;
 
 		             Object[] arg = new Object[1];
-		             boolean[][] results = new boolean[(int)ind.getPopulation().getWorld().MaxSteps][(int) ind.getPopulation().getWorld().TestsPerStep];
+		             boolean[][] results = new boolean[(int)getWorld().MaxSteps][(int) getWorld().TestsPerStep];
 		            
-				     for(int test = 0; test < ind.getPopulation().getWorld().TestsPerStep ; test++) {
-				    	for(int step = 0; step < ind.getPopulation().getWorld().MaxSteps; step++) {
+				     for(int test = 0; test < getWorld().TestsPerStep ; test++) {
+				    	for(int step = 0; step < getWorld().MaxSteps; step++) {
 				    		double[] res = (double[]) ind.execute(seeds[step]);
 				    		if(World.SHOWTRUTH)
 				    			System.out.println("ind:"+ind+" seeds["+step+"]="+seeds[step][0]+","+seeds[step][1]+" targs:"+targs[step][0]+","+targs[step][1]+" res:"+Arrays.toString(res));
@@ -60,11 +52,11 @@ public class Xor1 extends NeurosomeFitnessFunction {
 				      }
 				      
 		             //if( al.data.size() == 1 && ((Strings)(al.data.get(0))).data.equals("d")) hits = 10; // test
-		             rawFit = ind.getPopulation().getWorld().MinCost - hits;
+		             rawFit = getWorld().MinCost - hits;
 		             // The SHOWTRUTH flag is set on best individual during run. We make sure to 
 		             // place the checkAndStore inside the SHOWTRUTH block to ensure we only attempt to process
 		             // the best individual, and this is what occurs in the showTruth method
-		             ind.getPopulation().getWorld().showTruth(ind, rawFit, results);
+		             getWorld().showTruth(ind, rawFit, results);
 		        	 //System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
 		             return rawFit;
 		             

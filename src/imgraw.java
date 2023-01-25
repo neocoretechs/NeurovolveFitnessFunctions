@@ -21,7 +21,6 @@ public class imgraw extends NeurosomeFitnessFunction {
 	private static boolean DEBUG = false;
 	private static String prefix = "D:/etc/images/trainset/";
     private static Object mutex = new Object();
-    private World world;
     private static float breakOnAccuracyPercentage = .8f; // set to 0 for 100% accuracy expected
 	//Dataset dataset;
 	// We'll hardwire these in, but more robust code would not do so.
@@ -46,8 +45,8 @@ public class imgraw extends NeurosomeFitnessFunction {
 	/**
 	 * @param guid
 	 */
-	public imgraw(NeurosomeInterface ni) {
-		super(ni);
+	public imgraw(World w) {
+		super(w);
 	}
 
 	public imgraw() {}
@@ -64,23 +63,23 @@ public class imgraw extends NeurosomeFitnessFunction {
 			// Construct a new world to spin up remote connection
 			//categoryNames.get(index).getName() is category
 			// MinRawFitness is steps * testPerStep args one and two of setStepFactors
-			world.setStepFactors((float)datasetSize, 1.0f);
-			createImageVecs(world, dataset);
+			getWorld().setStepFactors((float)datasetSize, 1.0f);
+			createImageVecs(getWorld(), dataset);
 		}
 	}
 	    	
 	@Override
-	public Object execute() {
+	public Object execute(NeurosomeInterface ind) {
 		//Long tim = System.currentTimeMillis();
 		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
 	 	double hits = 0;
         double rawFit = -1;
         int errCount = 0;
 
-        boolean[][] results = new boolean[(int)world.MaxSteps][(int)world.TestsPerStep];
+        boolean[][] results = new boolean[(int)getWorld().MaxSteps][(int)getWorld().TestsPerStep];
         
-	    for(int test = 0; test < world.TestsPerStep ; test++) {
-	    	for(int step = 0; step < world.MaxSteps; step++) {
+	    for(int test = 0; test < getWorld().TestsPerStep ; test++) {
+	    	for(int step = 0; step < getWorld().MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
 	    		double[] outNeuro = ind.execute(imageVecs[step]);
 	    		String predicted = classify(outNeuro);
@@ -95,16 +94,16 @@ public class imgraw extends NeurosomeFitnessFunction {
 	    	}
 	    }
 		if(World.SHOWTRUTH)
-			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/world.MinCost)*100+"%");
-         rawFit = world.MinCost - hits;
+			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/getWorld().MinCost)*100+"%");
+         rawFit = getWorld().MinCost - hits;
          // break at predetermined accuracy level? adjust rawfit to 0 on that mark
          // MaxSteps * TestsPerStep is MinRawFitness. hits / MinRawFitness  = percentage passed
-         if( breakOnAccuracyPercentage > 0 && (hits/world.MinCost) >= breakOnAccuracyPercentage) {
+         if( breakOnAccuracyPercentage > 0 && (hits/getWorld().MinCost) >= breakOnAccuracyPercentage) {
         	 rawFit = 0;
-        	 world.showTruth(ind, rawFit, results);
+        	 getWorld().showTruth(ind, rawFit, results);
         	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/world.MinCost)*100+"%, adjusted raw fitness to zero.");
          } else {
-             world.showTruth(ind, rawFit, results);
+        	 getWorld().showTruth(ind, rawFit, results);
          }
      	 //System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
          return rawFit;

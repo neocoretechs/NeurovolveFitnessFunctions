@@ -13,6 +13,7 @@ import com.neocoretechs.neurovolve.Neurosome;
 import com.neocoretechs.neurovolve.NeurosomeInterface;
 import com.neocoretechs.neurovolve.activation.SoftMax;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
+import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeTransferFunction;
 import com.neocoretechs.neurovolve.relatrix.Storage;
 import com.neocoretechs.neurovolve.relatrix.ArgumentInstances;
 import com.neocoretechs.neurovolve.worlds.World;
@@ -31,16 +32,15 @@ import cnn.tools.Util;
  * @author Jonathan Groff (C) NeoCoreTechs 2023
  *
  */
-public class xferlearn extends NeurosomeFitnessFunction {
+public class xferlearn extends NeurosomeTransferFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
 	private static boolean DEBUG = false;
 	private static String prefix = "D:/etc/images/trainset/";
 	private static String localNode = "COREPLEX";
 	private static String remoteNode = "COREPLEX";
-	private static String sguid;
+	private String sguid;
 	private static int dbPort = 9020;
     //private static Object mutex = new Object();
-    private World world;
     private static float breakOnAccuracyPercentage = .9f; // set to 0 for 100% accuracy expected
 	//Dataset dataset;
 	// We'll hardwire these in, but more robust code would not do so.
@@ -62,12 +62,14 @@ public class xferlearn extends NeurosomeFitnessFunction {
 	int ivec = 0;
 	public static double[][] imageVecs; // each image output from previous neurosome, as 1D vector
 	private static String[] imageLabels;
+	private static String[] imageFiles;
 	
 	/**
 	 * @param guid
 	 */
-	public xferlearn(NeurosomeInterface ni) {
-		super(ni);
+	public xferlearn(World w, String sguid) {
+		super(w);
+		this.sguid = sguid;
 		init();
 	}
 
@@ -94,6 +96,7 @@ public class xferlearn extends NeurosomeFitnessFunction {
 					imageVecs[ivec][j] = ((Double)o[j]).doubleValue();
 				int locationOfUnderscoreImage = ((String)c[0]).indexOf("_image");
 				String name = ((String)c[0]);
+				imageFiles[ivec] = ((String)c[0]);
 				if(locationOfUnderscoreImage == -1)
 					name = "UNNOWN";
 				else
@@ -107,7 +110,7 @@ public class xferlearn extends NeurosomeFitnessFunction {
 			// Construct a new world to spin up remote connection
 			//categoryNames.get(index).getName() is category
 			// MinRawFitness is steps * testPerStep args one and two of setStepFactors
-			world.setStepFactors((float)datasetSize, 1.0f);
+			getWorld().setStepFactors((float)datasetSize, 1.0f);
 		}
 	}
 	    	
@@ -115,16 +118,16 @@ public class xferlearn extends NeurosomeFitnessFunction {
 	/**
 	 * Compute cross entropy loss, return cost
 	 */
-	public Object execute() {
+	public Object execute(NeurosomeInterface ind) {
 		//Long tim = System.currentTimeMillis();
 		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
 	 	float hits = 0;
         int errCount = 0;
 
-        boolean[][] results = new boolean[(int)world.MaxSteps][(int)world.TestsPerStep];
+        boolean[][] results = new boolean[(int)getWorld().MaxSteps][(int)getWorld().TestsPerStep];
         double cost = 0;
-	    for(int test = 0; test < world.TestsPerStep ; test++) {
-	    	for(int step = 0; step < world.MaxSteps; step++) {
+	    for(int test = 0; test < getWorld().TestsPerStep ; test++) {
+	    	for(int step = 0; step < getWorld().MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
 	    		double[] outVec = ind.execute(imageVecs[step]);
 	    		//for(int i = 0; i < outVec.length; i++)
@@ -159,13 +162,13 @@ public class xferlearn extends NeurosomeFitnessFunction {
          // break at predetermined accuracy level? adjust rawfit to 0 on that mark
          // MaxSteps * TestsPerStep is MinRawFitness. hits / MinRawFitness  = percentage passed
          if( breakOnAccuracyPercentage > 0 && (hits/(world.MaxSteps*world.TestsPerStep)) >= breakOnAccuracyPercentage) {
-        	 world.showTruth(ind, cost, results);
-        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/(world.MaxSteps*world.TestsPerStep))*100+"%.");
+        	 getWorld().showTruth(ind, cost, results);
+        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/(getWorld().MaxSteps*getWorld().TestsPerStep))*100+"%.");
         	 //if(world.getRemoteStorageClient() != null) {
         		 //Storage.storeSolver(world.getRemoteStorageClient(), ind);
         	 //}
          } else {
-             world.showTruth(ind, cost, results);
+        	 getWorld().showTruth(ind, cost, results);
          }
      	 //System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
          return cost;
@@ -313,5 +316,29 @@ public class xferlearn extends NeurosomeFitnessFunction {
 		return accuracy;
 	}
 	
+	@Override
+	/**
+	 * Generates transfer learning multi task data.
+	 * Reads guid Neurosome from db ri, generates output from dataset, writes each output vector to db ro
+	 */
+	public void transfer(RelatrixClient ro, NeurosomeInterface ind) {
+		for (int step = 0; step < imageVecs.length; step++) {
+			double[] outNeuro = ind.execute(imageVecs[step]);
+			//System.out.println(/*"Input "+img.toString()+*/" Output:"+Arrays.toString(outNeuro));
+			Object[] o = new Object[outNeuro.length];
+			for(int i = 0; i < outNeuro.length; i++) {
+				o[i] = new Double(outNeuro[i]);
+			}
+			ArgumentInstances ai = new ArgumentInstances(o);
+			try {
+				//String fLabel = String.format("%05d %s",step,imageLabels[step]);
+				ro.store(ind.toString(), imageFiles[step], ai);
+				//System.out.println(imageLabels[step]+" Stored!");
+			} catch (IllegalAccessException | IOException | DuplicateKeyException e) {
+				e.printStackTrace();
+			}
+		}
+		System.out.println(this.getClass().getName()+" transfer data stored.");
+	}
 }
 

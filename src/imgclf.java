@@ -55,12 +55,13 @@ public class imgclf extends NeurosomeTransferFunction {
 	public static int datasetSize = 0;
 	public static double[][] imageVecs; // each image as 1D float vector
 	private static String[] imageLabels;
+	private static String[] imageFiles;
 	
 	/**
 	 * @param guid
 	 */
-	public imgclf(NeurosomeInterface ni) {
-		super(ni);
+	public imgclf(World w) {
+		super(w);
 		init();
 	}
 
@@ -78,8 +79,8 @@ public class imgclf extends NeurosomeTransferFunction {
 			// Construct a new world to spin up remote connection
 			//categoryNames.get(index).getName() is category
 			// MinRawFitness is steps * testPerStep args one and two of setStepFactors
-			ind.getPopulation().getWorld().setStepFactors((float)datasetSize, 1.0f);
-			createImageVecs(ind.getPopulation().getWorld(), dataset);
+			getWorld().setStepFactors((float)datasetSize, 1.0f);
+			createImageVecs(getWorld(), dataset);
 		}
 	}
 	    	
@@ -87,16 +88,16 @@ public class imgclf extends NeurosomeTransferFunction {
 	/**
 	 * Compute cross entropy loss, return cost
 	 */
-	public Object execute() {
+	public Object execute(NeurosomeInterface ind) {
 		//Long tim = System.currentTimeMillis();
 		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
 	 	float hits = 0;
         int errCount = 0;
 
-        boolean[][] results = new boolean[(int)ind.getPopulation().getWorld().MaxSteps][(int)ind.getPopulation().getWorld().TestsPerStep];
+        boolean[][] results = new boolean[(int)getWorld().MaxSteps][(int)getWorld().TestsPerStep];
         double cost = 0;
-	    for(int test = 0; test < ind.getPopulation().getWorld().TestsPerStep ; test++) {
-	    	for(int step = 0; step < ind.getPopulation().getWorld().MaxSteps; step++) {
+	    for(int test = 0; test < getWorld().TestsPerStep ; test++) {
+	    	for(int step = 0; step < getWorld().MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
 	    		double[] outVec = ind.execute(imageVecs[step]);
 	    		//for(int i = 0; i < outVec.length; i++)
@@ -126,15 +127,15 @@ public class imgclf extends NeurosomeTransferFunction {
 	    //cost = ind.weightDecay(cost, .00001);
 
 		if(World.SHOWTRUTH)
-			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/ind.getPopulation().getWorld().MinCost)*100+"%");
+			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/ind.getWorld().MinCost)*100+"%");
          // rawFit = world.MinRawFitness - hits;
          // break at predetermined accuracy level? adjust rawfit to 0 on that mark
          // MaxSteps * TestsPerStep is MinRawFitness. hits / MinRawFitness  = percentage passed
-         if( breakOnAccuracyPercentage > 0 && (hits/(ind.getPopulation().getWorld().MaxSteps*ind.getPopulation().getWorld().TestsPerStep)) >= breakOnAccuracyPercentage) {
-        	 ind.getPopulation().getWorld().showTruth(ind, cost, results);
-        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/(ind.getPopulation().getWorld().MaxSteps*ind.getPopulation().getWorld().TestsPerStep))*100+"%.");
+         if( breakOnAccuracyPercentage > 0 && (hits/(getWorld().MaxSteps*getWorld().TestsPerStep)) >= breakOnAccuracyPercentage) {
+        	 getWorld().showTruth(ind, cost, results);
+        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/(getWorld().MaxSteps*getWorld().TestsPerStep))*100+"%.");
          } else {
-        	 ind.getPopulation().getWorld().showTruth(ind, cost, results);
+        	 getWorld().showTruth(ind, cost, results);
          }
      	 //System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
          return cost;
@@ -218,12 +219,14 @@ public class imgclf extends NeurosomeTransferFunction {
 	private static void createImageVecs(World world, Dataset dataset) {
 	    imageVecs = new double[(int)world.MaxSteps][];
 	    imageLabels = new String[(int)world.MaxSteps];
+	    imageFiles = new String[(int)world.MaxSteps];
 	    List<Instance> images = dataset.getImages();
     	for(int step = 0; step < world.MaxSteps; step++) {
     		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
     		Instance img = images.get(step);
     		Plate[] plates = instanceToPlate(img);
        		imageLabels[step] = img.getLabel();
+       		imageFiles[step] = img.getName();
     		imageVecs[step] = packPlates(Arrays.asList(plates));
     		/*
     		float[] inFloat = new float[img.getWidth()*img.getHeight()];
@@ -247,7 +250,7 @@ public class imgclf extends NeurosomeTransferFunction {
 	 * Generates transfer learning multi task data.
 	 * Reads guid Neurosome from db ri, generates output from dataset, writes each output vector to db ro
 	 */
-	public void transfer(RelatrixClient ro) {
+	public void transfer(RelatrixClient ro, NeurosomeInterface ind) {
 		for (int step = 0; step < imageVecs.length; step++) {
 			double[] outNeuro = ind.execute(imageVecs[step]);
 			//System.out.println(/*"Input "+img.toString()+*/" Output:"+Arrays.toString(outNeuro));
@@ -257,12 +260,14 @@ public class imgclf extends NeurosomeTransferFunction {
 			}
 			ArgumentInstances ai = new ArgumentInstances(o);
 			try {
-				ro.store(ind.getRepresentation(), imageLabels[step], ai);
-				System.out.println(imageLabels[step]+" Stored!");
+				//String fLabel = String.format("%05d %s",step,imageLabels[step]);
+				ro.store(ind.toString(), imageFiles[step], ai);
+				//System.out.println(imageLabels[step]+" Stored!");
 			} catch (IllegalAccessException | IOException | DuplicateKeyException e) {
 				e.printStackTrace();
 			}
 		}
+		System.out.println(this.getClass().getName()+" transfer data stored.");
 	}
 	
 }
