@@ -11,15 +11,19 @@ import java.util.List;
 import com.neocoretechs.neurovolve.NeuralNet;
 import com.neocoretechs.neurovolve.Neurosome;
 import com.neocoretechs.neurovolve.NeurosomeInterface;
+import com.neocoretechs.neurovolve.activation.ActivationInterface;
 import com.neocoretechs.neurovolve.activation.SoftMax;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeTransferFunction;
+import com.neocoretechs.neurovolve.properties.LoadProperties;
+import com.neocoretechs.neurovolve.properties.Props;
 import com.neocoretechs.neurovolve.relatrix.Storage;
 import com.neocoretechs.neurovolve.relatrix.ArgumentInstances;
 import com.neocoretechs.neurovolve.worlds.World;
 import com.neocoretechs.relatrix.DuplicateKeyException;
 import com.neocoretechs.relatrix.client.RelatrixClient;
 import com.neocoretechs.relatrix.client.RemoteStream;
+import com.neocoretechs.relatrix.client.RemoteTailSetIterator;
 
 import cnn.components.Plate;
 import cnn.driver.Dataset;
@@ -63,8 +67,17 @@ public class xferlearn extends NeurosomeTransferFunction {
 	public static double[][] imageVecs; // each image output from previous neurosome, as 1D vector
 	private static String[] imageLabels;
 	private static String[] imageFiles;
+	private static NeurosomeInterface solver = null;
 	
 	/**
+	 * This ctor gets called by default by Genome, overloaded ctor with guid will get called by GenomeTransfer
+	 * @param w
+	 */
+	public xferlearn(World w) {
+		super(w);
+	}
+	/**
+	 * This ctor gets called for transfer after default with world
 	 * @param guid
 	 */
 	public xferlearn(World w, String sguid) {
@@ -78,39 +91,46 @@ public class xferlearn extends NeurosomeTransferFunction {
 	public void init() {
 		
 		if(datasetSize == 0) {
-			RemoteStream rs = null;
+			Dataset dataset = Util.loadDataset(new File(prefix), null, false);
+			datasetSize = dataset.getSize();
+			// MinRawFitness is steps * testPerStep args one and two of setStepFactors
+			getWorld().setStepFactors((float)datasetSize, 1.0f);
+			System.out.printf("Dataset from %s loaded with %d images%n", prefix, datasetSize);
+			createImageVecs(getWorld(), dataset);
+			// set the properties to hardwire the source activation function
+			LoadProperties.brandomizeActivation = false;
+			// retrieve original solver
+			RemoteTailSetIterator it;
 			try {
-				RelatrixClient rkvc = new RelatrixClient(localNode, remoteNode, dbPort);
-				rs = rkvc.findSetStream(sguid, "?", "?");
+				it = getWorld().getRemoteStorageClient().findSet("*","?","*");
 			} catch (IllegalArgumentException | ClassNotFoundException | IllegalAccessException | IOException e1) {
 				throw new RuntimeException(e1);
 			}
-			datasetSize = (int) rs.of().count();
-			imageVecs = new double[datasetSize][];
-			imageLabels = new String[datasetSize];
-			rs.of().forEach(e -> {
-				Comparable[] c = (Comparable[])e;
-				Object[] o = ((ArgumentInstances)c[1]).argInst;
-				imageVecs[ivec] = new double[o.length];
-				for(int j = 0; j < o.length; j++)
-					imageVecs[ivec][j] = ((Double)o[j]).doubleValue();
-				int locationOfUnderscoreImage = ((String)c[0]).indexOf("_image");
-				String name = ((String)c[0]);
-				imageFiles[ivec] = ((String)c[0]);
-				if(locationOfUnderscoreImage == -1)
-					name = "UNNOWN";
-				else
-					name = name.substring(0, locationOfUnderscoreImage);
-				imageLabels[ivec] = name;
-				System.out.println(ivec+" = "+sguid+": "+imageLabels[ivec]+" | "+Arrays.toString(imageVecs[ivec]));
-				++ivec;
-			});
-			
-			System.out.printf("Dataset from %s loaded with %d images%n", sguid, datasetSize);
-			// Construct a new world to spin up remote connection
-			//categoryNames.get(index).getName() is category
-			// MinRawFitness is steps * testPerStep args one and two of setStepFactors
-			getWorld().setStepFactors((float)datasetSize, 1.0f);
+			while(getWorld().getRemoteStorageClient().hasNext(it)) {
+				Comparable[] solvers = getWorld().getRemoteStorageClient().next(it);
+				solver = (NeurosomeInterface)solvers[0];
+				if(solver.getName().equals(sguid))
+					break;
+			}
+			if(solver == null) {
+				throw new RuntimeException("Could not locate "+sguid+" in stored solvers!");
+			}
+			// Now generate vectors of output of inference for stored solver to use as input to evolve
+			// new solvers
+		    for(int step = 0; step < getWorld().MaxSteps; step++) {
+		    	double[] outVec = solver.execute(imageVecs[step]);
+		    	imageVecs[step] = outVec;
+		    }
+		    // Make sure we set the activation function to be the same as original solver
+			LoadProperties.sactivationFunction = ((NeuralNet)solver).getActivationFunction().getClass().getName();
+			try {
+				LoadProperties.activate = (ActivationInterface) Class.forName(LoadProperties.sactivationFunction).newInstance();
+			} catch (SecurityException | ClassNotFoundException | InstantiationException | IllegalAccessException e) {
+				throw new RuntimeException(e);
+			}
+			System.out.println("Activation function set to "+LoadProperties.sactivationFunction);
+			// 
+	
 		}
 	}
 	    	
@@ -252,29 +272,18 @@ public class xferlearn extends NeurosomeTransferFunction {
 	private static void createImageVecs(World world, Dataset dataset) {
 	    imageVecs = new double[(int)world.MaxSteps][];
 	    imageLabels = new String[(int)world.MaxSteps];
+	    imageFiles = new String[(int)world.MaxSteps];
 	    List<Instance> images = dataset.getImages();
     	for(int step = 0; step < world.MaxSteps; step++) {
     		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
     		Instance img = images.get(step);
     		Plate[] plates = instanceToPlate(img);
        		imageLabels[step] = img.getLabel();
+       		imageFiles[step] = img.getName();
     		imageVecs[step] = packPlates(Arrays.asList(plates));
-    		/*
-    		float[] inFloat = new float[img.getWidth()*img.getHeight()];
-    		int[] dstBuff = new int[img.getWidth()*img.getHeight()];
-    		Instance.readLuminance(img.getImage(), dstBuff);
-    		int i = 0;
-    		for (int row = 0; row < img.getHeight(); ++row) {
-    			for (int col = 0; col < img.getWidth(); ++col) {
-    				inFloat[i] = ((float)dstBuff[i]) / 255.0f;
-	    			//System.out.println(i+"="+inFloat[i]);
-	    			++i;
-    			}
-    		}
-    		float[] inFloat = new float[d.length];
-    		*/
     	}
 	}
+	
 	
 	/**
 	 * Generates transfer learning multi task data.
@@ -315,15 +324,58 @@ public class xferlearn extends NeurosomeTransferFunction {
 		}
 		return accuracy;
 	}
-	
-	@Override
 	/**
-	 * Generates transfer learning multi task data.
-	 * Reads guid Neurosome from db ri, generates output from dataset, writes each output vector to db ro
+	 * Load imageVecs with previously stored output inference data from a specific 
+	 * neurosome indexed by guid for the purpose of transfer learning.
+	 * sguid field contains specific guid. dbPort contains port of remote db
+	 * containing stored data. Expected format of db data is: [guid, image_file, double output array]
 	 */
-	public void transfer(RelatrixClient ro, NeurosomeInterface ind) {
+	private void loadStoredInference() {
+		RemoteStream rs = null;
+		try {
+			RelatrixClient rkvc = new RelatrixClient(localNode, remoteNode, dbPort);
+			rs = rkvc.findSetStream(sguid, "?", "?");
+		} catch (IllegalArgumentException | ClassNotFoundException | IllegalAccessException | IOException e1) {
+			throw new RuntimeException(e1);
+		}
+		datasetSize = (int) rs.of().count();
+		imageVecs = new double[datasetSize][];
+		imageLabels = new String[datasetSize];
+		imageFiles = new String[datasetSize];
+		rs.of().forEach(e -> {
+			Comparable[] c = (Comparable[])e;
+			Object[] o = ((ArgumentInstances)c[1]).argInst;
+			imageVecs[ivec] = new double[o.length];
+			for(int j = 0; j < o.length; j++)
+				imageVecs[ivec][j] = ((Double)o[j]).doubleValue();
+			int locationOfUnderscoreImage = ((String)c[0]).indexOf("_image");
+			String name = ((String)c[0]);
+			imageFiles[ivec] = ((String)c[0]);
+			if(locationOfUnderscoreImage == -1)
+				name = "UNNOWN";
+			else
+				name = name.substring(0, locationOfUnderscoreImage);
+			imageLabels[ivec] = name;
+			System.out.println(ivec+" = "+sguid+": "+imageLabels[ivec]+" | "+Arrays.toString(imageVecs[ivec]));
+			++ivec;
+		});
+		
+		System.out.printf("Dataset from %s loaded with %d images%n", sguid, datasetSize);
+		// Construct a new world to spin up remote connection
+		//categoryNames.get(index).getName() is category
+		// MinRawFitness is steps * testPerStep args one and two of setStepFactors
+		getWorld().setStepFactors((float)datasetSize, 1.0f);
+	}
+	/**
+	 * Store the output from the passed Neurosome after it has processed data in imageVecs array.
+	 * format of DB is [GUID, image file name, double output array from inference]
+	 * @param ro
+	 * @param ind
+	 */
+	private void storeInferredOutput(RelatrixClient ro, NeurosomeInterface ind) {
 		for (int step = 0; step < imageVecs.length; step++) {
 			double[] outNeuro = ind.execute(imageVecs[step]);
+			System.out.println(/*"Input "+img.toString()+*/" Output:"+Arrays.toString(outNeuro));
 			//System.out.println(/*"Input "+img.toString()+*/" Output:"+Arrays.toString(outNeuro));
 			Object[] o = new Object[outNeuro.length];
 			for(int i = 0; i < outNeuro.length; i++) {
@@ -339,6 +391,20 @@ public class xferlearn extends NeurosomeTransferFunction {
 			}
 		}
 		System.out.println(this.getClass().getName()+" transfer data stored.");
+	}
+	
+	@Override
+	/**
+	* Concatenate original solver and evolved solver form result of this evolutionary run.
+	* Old solver is preserved from above loading in init()
+	* Store it in Db to which client is connected
+	* @param ro The client of remote db to store new solver
+	* @param ind the new best individual from runs.
+	*/
+	public void transfer(RelatrixClient ro, NeurosomeInterface ind) {
+   	 if(ro != null) {
+		 Storage.storeSolver(ro, solver.concat(ind));
+	 }
 	}
 }
 
