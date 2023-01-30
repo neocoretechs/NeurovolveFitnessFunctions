@@ -100,17 +100,11 @@ public class xferlearn extends NeurosomeTransferFunction {
 			// set the properties to hardwire the source activation function
 			LoadProperties.brandomizeActivation = false;
 			// retrieve original solver
-			RemoteTailSetIterator it;
+			Neurosome ni = new Neurosome(sguid);
 			try {
-				it = getWorld().getRemoteStorageClient().findSet("*","?","*");
+				solver = (Neurosome) Storage.loadSolver2(getWorld().getRemoteStorageClient(), ni);
 			} catch (IllegalArgumentException | ClassNotFoundException | IllegalAccessException | IOException e1) {
 				throw new RuntimeException(e1);
-			}
-			while(getWorld().getRemoteStorageClient().hasNext(it)) {
-				Comparable[] solvers = getWorld().getRemoteStorageClient().next(it);
-				solver = (NeurosomeInterface)solvers[0];
-				if(solver.getName().equals(sguid))
-					break;
 			}
 			if(solver == null) {
 				throw new RuntimeException("Could not locate "+sguid+" in stored solvers!");
