@@ -248,9 +248,13 @@ public class imgclf extends NeurosomeTransferFunction {
 	@Override
 	/**
 	 * Generates transfer learning multi task data.
-	 * Reads guid Neurosome from db ri, generates output from dataset, writes each output vector to db ro
+	 * Generates output from each inference of passed neurosome against imageVecs training data.
+	 * Writes each output vector to db client with GUID->image file name->output node vector for inferenced image.
+	 * @param ro RelatrixClient for data storage, must be seperate from main solver storage.
+	 * @param ind Neurosome to perform inference with each imageVecs vector
+	 * @return true since this function can also be used to continue until we reach a threshold, but here just return true to stop.
 	 */
-	public void transfer(RelatrixClient ro, NeurosomeInterface ind) {
+	public boolean transfer(RelatrixClient ro, NeurosomeInterface ind) {
 		for (int step = 0; step < imageVecs.length; step++) {
 			double[] outNeuro = ind.execute(imageVecs[step]);
 			//System.out.println(/*"Input "+img.toString()+*/" Output:"+Arrays.toString(outNeuro));
@@ -268,6 +272,7 @@ public class imgclf extends NeurosomeTransferFunction {
 			}
 		}
 		System.out.println(this.getClass().getName()+" transfer data stored.");
+		return true;
 	}
 	
 }
