@@ -68,6 +68,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 	private static String[] imageLabels;
 	private static String[] imageFiles;
 	private static NeurosomeInterface solver = null;
+	private static double improvementThreshold = .1; //percentage of improvement to return true in comparison of accuracy
 	
 	/**
 	 * This ctor gets called by default by Genome, overloaded ctor with guid will get called by GenomeTransfer
@@ -389,16 +390,60 @@ public class xferlearn extends NeurosomeTransferFunction {
 	
 	@Override
 	/**
-	* Concatenate original solver and evolved solver form result of this evolutionary run.
+	* Concatenate original solver and evolved solver from result of this evolutionary run.
 	* Old solver is preserved from above loading in init()
 	* Store it in Db to which client is connected
 	* @param ro The client of remote db to store new solver
 	* @param ind the new best individual from runs.
+	* @return true if improvement of passed best solver concatenated with stored solver exceeds improvementThreshold value as percentage over stored solver
 	*/
-	public void transfer(RelatrixClient ro, NeurosomeInterface ind) {
-   	 if(ro != null) {
-		 Storage.storeSolver(ro, solver.concat(ind));
-	 }
+	public boolean transfer(RelatrixClient ro, NeurosomeInterface ind) {
+		NeurosomeInterface newSolver = solver.concat(ind);
+		boolean isBetter = xferTests(ind);
+		if(ro != null && isBetter) {
+			Storage.storeSolver(ro, newSolver);
+		}
+		return isBetter;
 	}
+	
+	/**
+	 * Compares stored solver with passed presumed best individual against dataset input test vectors
+	 * to determine if new best individual exceeds accuracy of stored solver by given percentage.
+	 * @return true if passed Neurosome is more accurate by given threshold. 
+	 */
+	public static boolean xferTests(NeurosomeInterface nt)  {
+		int nInErr = 0;
+		int oInErr = 0;
+		int total = 0;
+		//NeuralNet.SHOWEIGHTS = true;
+		//System.out.println("Neurosome 1 "+solver.getRepresentation());
+		//System.out.println("Neurosome 2 "+nt.getRepresentation());
+    	for(int step = 0; step < nt.getWorld().MaxSteps; step++) {
+			double[] outNeuro1 = solver.execute(imageVecs[step]);
+			//System.out.println("Input "+imageLabels[step]+" Output1:"+Arrays.toString(outNeuro1));
+			// chain the output
+			//double[] outNeuro = nt.execute(outNeuro1);
+			// exec same input individually
+			double[] outNeuro = nt.execute(imageVecs[step]);
+			//System.out.println("Input "+imageLabels[step]+" Output2:"+Arrays.toString(outNeuro));			
+			String opredicted = classify(outNeuro1);
+			if (!opredicted.equals(imageLabels[step])) {
+				++oInErr;
+			}	
+			//System.out.printf("Predicted: %s\t\tActual:%s cat=%d File:%s\n", opredicted, imageLabels[step],categoryNames.indexOf(imageLabels[step]), imageFiles[step]);
+			String predicted = classify(outNeuro);
+			if (!predicted.equals(imageLabels[step])) {
+				++nInErr;
+			}	
+			//System.out.printf("Predicted: %s\t\tActual:%s cat=%d File:%s\n", predicted, imageLabels[step],categoryNames.indexOf(imageLabels[step]), imageFiles[step]);
+			++total;
+		}	
+		double oaccuracy = ((double) (total - oInErr)) / (double)total;
+		double naccuracy = ((double) (total - nInErr)) / (double)total;
+		double improvement = naccuracy - oaccuracy;
+		System.out.println("Improvement of best = "+improvement);
+		return (improvement >= improvementThreshold);
+	}
+	
 }
 
