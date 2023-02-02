@@ -65,6 +65,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 	public static int datasetSize = 0;
 	int ivec = 0;
 	public static double[][] imageVecs; // each image output from previous neurosome, as 1D vector
+	public static double[][] outputVecs; // each image output from previous neurosome, as 1D vector
 	private static String[] imageLabels;
 	private static String[] imageFiles;
 	private static NeurosomeInterface solver = null;
@@ -114,7 +115,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 			// new solvers
 		    for(int step = 0; step < getWorld().MaxSteps; step++) {
 		    	double[] outVec = solver.execute(imageVecs[step]);
-		    	imageVecs[step] = outVec;
+		    	outputVecs[step] = outVec;
 		    }
 		    // Make sure we set the activation function to be the same as original solver
 			LoadProperties.sactivationFunction = ((NeuralNet)solver).getActivationFunction().getClass().getName();
@@ -144,7 +145,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 	    for(int test = 0; test < getWorld().TestsPerStep ; test++) {
 	    	for(int step = 0; step < getWorld().MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
-	    		double[] outVec = ind.execute(imageVecs[step]);
+	    		double[] outVec = ind.execute(outputVecs[step]);
 	    		//for(int i = 0; i < outVec.length; i++)
 	    			//if(Double.isNaN(outVec[i]))
 	    				//outVec[i] = Double.MIN_VALUE;
@@ -266,6 +267,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 	
 	private static void createImageVecs(World world, Dataset dataset) {
 	    imageVecs = new double[(int)world.MaxSteps][];
+	    outputVecs = new double[(int)world.MaxSteps][];
 	    imageLabels = new String[(int)world.MaxSteps];
 	    imageFiles = new String[(int)world.MaxSteps];
 	    List<Instance> images = dataset.getImages();
@@ -409,28 +411,29 @@ public class xferlearn extends NeurosomeTransferFunction {
 	/**
 	 * Compares stored solver with passed presumed best individual against dataset input test vectors
 	 * to determine if new best individual exceeds accuracy of stored solver by given percentage.
+	 * @param nt The new concatenated Neurosome from Solver + best fit
 	 * @return true if passed Neurosome is more accurate by given threshold. 
 	 */
-	public static boolean xferTests(NeurosomeInterface nt)  {
+	public boolean xferTests(NeurosomeInterface nt)  {
 		int nInErr = 0;
 		int oInErr = 0;
 		int total = 0;
 		//NeuralNet.SHOWEIGHTS = true;
-		//System.out.println("Neurosome 1 "+solver.getRepresentation());
-		//System.out.println("Neurosome 2 "+nt.getRepresentation());
-    	for(int step = 0; step < nt.getWorld().MaxSteps; step++) {
+		//System.out.println("Neurosome original: "+(solver == null ? "NULL" : solver.getRepresentation()));
+		//System.out.println("Neurosome concat: "+(nt == null? "NULL" : nt.getRepresentation()));
+		//System.out.println("world "+(getWorld() == null ? "WORLD NULL" : getWorld()));
+    	for(int step = 0; step < getWorld().MaxSteps; step++) {
 			double[] outNeuro1 = solver.execute(imageVecs[step]);
 			//System.out.println("Input "+imageLabels[step]+" Output1:"+Arrays.toString(outNeuro1));
 			// chain the output
-			//double[] outNeuro = nt.execute(outNeuro1);
-			// exec same input individually
-			double[] outNeuro = nt.execute(imageVecs[step]);
-			//System.out.println("Input "+imageLabels[step]+" Output2:"+Arrays.toString(outNeuro));			
+			//double[] outNeuro = nt.execute(outNeuro1);	
 			String opredicted = classify(outNeuro1);
 			if (!opredicted.equals(imageLabels[step])) {
 				++oInErr;
 			}	
 			//System.out.printf("Predicted: %s\t\tActual:%s cat=%d File:%s\n", opredicted, imageLabels[step],categoryNames.indexOf(imageLabels[step]), imageFiles[step]);
+			double[] outNeuro = nt.execute(imageVecs[step]);
+			//System.out.println("Input "+imageLabels[step]+" Output2:"+Arrays.toString(outNeuro));		
 			String predicted = classify(outNeuro);
 			if (!predicted.equals(imageLabels[step])) {
 				++nInErr;
