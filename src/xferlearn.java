@@ -399,7 +399,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 	*/
 	public boolean transfer(RelatrixClient ro, NeurosomeInterface ind) {
 		NeurosomeInterface newSolver = solver.concat(ind);
-		boolean isBetter = xferTests(ind);
+		boolean isBetter = xferTests(newSolver);
 		if(ro != null && isBetter) {
 			Storage.storeSolver(ro, newSolver);
 		}
