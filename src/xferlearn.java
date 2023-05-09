@@ -39,9 +39,9 @@ import cnn.tools.Util;
 public class xferlearn extends NeurosomeTransferFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
 	private static boolean DEBUG = false;
-	private static String prefix = "D:/etc/images/trainset/";
-	private static String localNode = "COREPLEX";
-	private static String remoteNode = "COREPLEX";
+	private static String prefix = "/media/jg/tensordisk/images/trainset/";//"D:/etc/images/trainset/";
+	private static String localNode = "192.168.1.153";//"COREPLEX";
+	private static String remoteNode = "192.168.1.153";//"COREPLEX";
 	private String sguid;
 	private static int dbPort = 9020;
     //private static Object mutex = new Object();

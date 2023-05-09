@@ -33,7 +33,7 @@ import cnn.tools.Util;
 public class imgclf extends NeurosomeTransferFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
 	private static boolean DEBUG = false;
-	private static String prefix = "D:/etc/images/trainset/";
+	private static String prefix = "/media/jg/tensordisk/images/trainset/";//"D:/etc/images/trainset/";
     //private static Object mutex = new Object();
     private static float breakOnAccuracyPercentage = .7f; // set to 0 for 100% accuracy expected
 	//Dataset dataset;
