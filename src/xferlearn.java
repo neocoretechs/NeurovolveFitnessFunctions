@@ -22,6 +22,7 @@ import com.neocoretechs.neurovolve.relatrix.ArgumentInstances;
 import com.neocoretechs.neurovolve.worlds.World;
 import com.neocoretechs.relatrix.DuplicateKeyException;
 import com.neocoretechs.relatrix.client.RelatrixClient;
+import com.neocoretechs.relatrix.client.RelatrixClientInterface;
 import com.neocoretechs.relatrix.client.RemoteStream;
 import com.neocoretechs.relatrix.client.RemoteTailSetIterator;
 
@@ -102,12 +103,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 			// set the properties to hardwire the source activation function
 			LoadProperties.brandomizeActivation = false;
 			// retrieve original solver
-			Neurosome ni = new Neurosome(sguid);
-			try {
-				solver = (Neurosome) Storage.loadSolver2(getWorld().getRemoteStorageClient(), ni);
-			} catch (IllegalArgumentException | ClassNotFoundException | IllegalAccessException | IOException e1) {
-				throw new RuntimeException(e1);
-			}
+			solver = (Neurosome) Storage.loadSolver(getWorld().getRemoteStorageClient(), sguid);
 			if(solver == null) {
 				throw new RuntimeException("Could not locate "+sguid+" in stored solvers!");
 			}
@@ -399,7 +395,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 	* @param ind the new best individual from runs.
 	* @return true if improvement of passed best solver concatenated with stored solver exceeds improvementThreshold value as percentage over stored solver
 	*/
-	public boolean transfer(RelatrixClient ro, NeurosomeInterface ind) {
+	public boolean transfer(RelatrixClientInterface ro, NeurosomeInterface ind) {
 		NeurosomeInterface newSolver = solver.concat(ind);
 		boolean isBetter = xferTests(newSolver);
 		if(ro != null && isBetter) {

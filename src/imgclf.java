@@ -16,6 +16,7 @@ import com.neocoretechs.neurovolve.relatrix.Storage;
 import com.neocoretechs.neurovolve.worlds.World;
 import com.neocoretechs.relatrix.DuplicateKeyException;
 import com.neocoretechs.relatrix.client.RelatrixClient;
+import com.neocoretechs.relatrix.client.RelatrixClientInterface;
 
 import cnn.components.Plate;
 import cnn.driver.Dataset;
@@ -247,14 +248,18 @@ public class imgclf extends NeurosomeTransferFunction {
 	
 	@Override
 	/**
-	 * Generates transfer learning multi task data.
+	 * Generates transfer learning multi task data. Alternate to generation from image directory.
+	 * Requires alternate Relatrix database besides 2 K/V stores for neurosome.
+	 * Would be called from RelatrixTransferWorld upon completion of initial stage, otherwise we
+	 * are generating a Neurosome to K/V store in standard RelatrixWorld, then using xferlearn fitness function
+	 * with init that loads from image directory.
 	 * Generates output from each inference of passed neurosome against imageVecs training data.
 	 * Writes each output vector to db client with GUID->image file name->output node vector for inferenced image.
 	 * @param ro RelatrixClient for data storage, must be seperate from main solver storage.
 	 * @param ind Neurosome to perform inference with each imageVecs vector
 	 * @return true since this function can also be used to continue until we reach a threshold, but here just return true to stop.
 	 */
-	public boolean transfer(RelatrixClient ro, NeurosomeInterface ind) {
+	public boolean transfer(RelatrixClientInterface ro, NeurosomeInterface ind) {
 		for (int step = 0; step < imageVecs.length; step++) {
 			double[] outNeuro = ind.execute(imageVecs[step]);
 			//System.out.println(/*"Input "+img.toString()+*/" Output:"+Arrays.toString(outNeuro));
@@ -265,7 +270,7 @@ public class imgclf extends NeurosomeTransferFunction {
 			ArgumentInstances ai = new ArgumentInstances(o);
 			try {
 				//String fLabel = String.format("%05d %s",step,imageLabels[step]);
-				ro.store(ind.toString(), imageFiles[step], ai);
+				((RelatrixClient)ro).store(ind.toString(), imageFiles[step], ai);
 				//System.out.println(imageLabels[step]+" Stored!");
 			} catch (IllegalAccessException | IOException | DuplicateKeyException e) {
 				e.printStackTrace();
