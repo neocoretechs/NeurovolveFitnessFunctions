@@ -31,7 +31,13 @@
   		<classpath refid="master-classpath"/>
     </javac>
   </target>
-
+	
+	<!--Creates the deployable jar file  -->
+  <target name="jar" depends="compile">
+	    <jar destfile="${bin.dir}/FitFunc.jar" basedir="${bin.dir}" includes="**/**">
+	    </jar>
+  </target>
+	
   <!-- Creates Javadoc -->
   <target name="docs" depends="compile">
     <javadoc packagenames="src" sourcepath="${src.dir}" destdir="${docs.dir}">
