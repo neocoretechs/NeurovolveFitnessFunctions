@@ -259,7 +259,7 @@ public class imgclf extends NeurosomeTransferFunction {
 	 * @param ind Neurosome to perform inference with each imageVecs vector
 	 * @return true since this function can also be used to continue until we reach a threshold, but here just return true to stop.
 	 */
-	public boolean transfer(RelatrixClientInterface ro, NeurosomeInterface ind) {
+	public boolean transfer(NeurosomeInterface ind) {
 		for (int step = 0; step < imageVecs.length; step++) {
 			double[] outNeuro = ind.execute(imageVecs[step]);
 			//System.out.println(/*"Input "+img.toString()+*/" Output:"+Arrays.toString(outNeuro));
@@ -268,13 +268,13 @@ public class imgclf extends NeurosomeTransferFunction {
 				o[i] = new Double(outNeuro[i]);
 			}
 			ArgumentInstances ai = new ArgumentInstances(o);
-			try {
+			//try {
 				//String fLabel = String.format("%05d %s",step,imageLabels[step]);
-				((RelatrixClient)ro).store(ind.toString(), imageFiles[step], ai);
+				//((RelatrixClient)ro).store(ind.toString(), imageFiles[step], ai);
 				//System.out.println(imageLabels[step]+" Stored!");
-			} catch (IllegalAccessException | IOException | DuplicateKeyException e) {
-				e.printStackTrace();
-			}
+			//} catch (IllegalAccessException | IOException | DuplicateKeyException e) {
+			//	e.printStackTrace();
+			//}
 		}
 		System.out.println(this.getClass().getName()+" transfer data stored.");
 		return true;

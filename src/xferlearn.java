@@ -7,24 +7,22 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Stream;
 
-import com.neocoretechs.neurovolve.NeuralNet;
-import com.neocoretechs.neurovolve.Neurosome;
+import com.neocoretechs.neurovolve.NeuralNetCu;
+import com.neocoretechs.neurovolve.NeurosomeCu;
 import com.neocoretechs.neurovolve.NeurosomeInterface;
 import com.neocoretechs.neurovolve.activation.ActivationInterface;
 import com.neocoretechs.neurovolve.activation.SoftMax;
-import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeTransferFunction;
 import com.neocoretechs.neurovolve.properties.LoadProperties;
-import com.neocoretechs.neurovolve.properties.Props;
 import com.neocoretechs.neurovolve.relatrix.Storage;
 import com.neocoretechs.neurovolve.relatrix.ArgumentInstances;
 import com.neocoretechs.neurovolve.worlds.World;
+
 import com.neocoretechs.relatrix.DuplicateKeyException;
 import com.neocoretechs.relatrix.client.RelatrixClient;
-import com.neocoretechs.relatrix.client.RelatrixClientInterface;
 import com.neocoretechs.relatrix.client.RemoteStream;
-import com.neocoretechs.relatrix.client.RemoteTailSetIterator;
 
 import cnn.components.Plate;
 import cnn.driver.Dataset;
@@ -41,10 +39,10 @@ public class xferlearn extends NeurosomeTransferFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
 	private static boolean DEBUG = false;
 	private static String prefix = "/media/jg/tensordisk/images/trainset/";//"D:/etc/images/trainset/";
-	private static String localNode = "192.168.1.153";//"COREPLEX";
-	private static String remoteNode = "192.168.1.153";//"COREPLEX";
+	//private static String localNode = "192.168.1.153";//"COREPLEX";
+	//private static String remoteNode = "192.168.1.153";//"COREPLEX";
 	private String sguid;
-	private static int dbPort = 9020;
+	//private static int dbPort = 9020;
     //private static Object mutex = new Object();
     private static float breakOnAccuracyPercentage = .9f; // set to 0 for 100% accuracy expected
 	//Dataset dataset;
@@ -103,10 +101,12 @@ public class xferlearn extends NeurosomeTransferFunction {
 			// set the properties to hardwire the source activation function
 			LoadProperties.brandomizeActivation = false;
 			// retrieve original solver
-			solver = (Neurosome) Storage.loadSolver(getWorld().getRemoteStorageClient(), sguid);
+			//solver = (Neurosome) Storage.loadSolver(getWorld().getRemoteStorageClient(), sguid);
+			solver = (NeurosomeCu) Storage.loadSolver(sguid, LoadProperties.slearnDb);
 			if(solver == null) {
 				throw new RuntimeException("Could not locate "+sguid+" in stored solvers!");
 			}
+			solver.init();
 			// Now generate vectors of output of inference for stored solver to use as input to evolve
 			// new solvers
 		    for(int step = 0; step < getWorld().MaxSteps; step++) {
@@ -114,7 +114,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 		    	outputVecs[step] = outVec;
 		    }
 		    // Make sure we set the activation function to be the same as original solver
-			LoadProperties.sactivationFunction = ((NeuralNet)solver).getActivationFunction().getClass().getName();
+			LoadProperties.sactivationFunction = ((NeuralNetCu)solver).getActivationFunction().getClass().getName();
 			try {
 				LoadProperties.activate = (ActivationInterface) Class.forName(LoadProperties.sactivationFunction).newInstance();
 			} catch (SecurityException | ClassNotFoundException | InstantiationException | IllegalAccessException e) {
@@ -142,9 +142,6 @@ public class xferlearn extends NeurosomeTransferFunction {
 	    	for(int step = 0; step < getWorld().MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
 	    		double[] outVec = ind.execute(outputVecs[step]);
-	    		//for(int i = 0; i < outVec.length; i++)
-	    			//if(Double.isNaN(outVec[i]))
-	    				//outVec[i] = Double.MIN_VALUE;
 	    		double[] actual = softMax(outVec);
 	    		// expected is one-hot encoded for class
 	    		double expected = 0;
@@ -163,7 +160,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 	    		}
 	    	}
 	    }
-	    if(/*cost < 0 || Double.isInfinite(cost) ||*/ Double.isNaN(cost))
+	    if(Double.isNaN(cost))
 	    	cost = Double.MAX_VALUE/2;
 
 	    //cost = ind.weightDecay(cost, .00001);
@@ -212,9 +209,6 @@ public class xferlearn extends NeurosomeTransferFunction {
 		double[] smax = new double[dprobs.length];
 		for (int i = 0; i < dprobs.length; i++) {
 			smax[i] = sf.activate(dprobs[i]);
-			// normalize
-			//if(smax[i] < 0 || Double.isNaN(smax[i]))
-				//smax[i] = Double.MIN_VALUE;
 		}
 		return smax;
 	}
@@ -324,18 +318,18 @@ public class xferlearn extends NeurosomeTransferFunction {
 	 * containing stored data. Expected format of db data is: [guid, image_file, double output array]
 	 */
 	private void loadStoredInference() {
-		RemoteStream rs = null;
-		try {
-			RelatrixClient rkvc = new RelatrixClient(localNode, remoteNode, dbPort);
-			rs = rkvc.findSetStream(sguid, "?", "?");
-		} catch (IllegalArgumentException | ClassNotFoundException | IllegalAccessException | IOException e1) {
-			throw new RuntimeException(e1);
-		}
-		datasetSize = (int) rs.of().count();
+		Stream rs = null;
+		//try {
+		//	RelatrixClient rkvc = new RelatrixClient(localNode, remoteNode, dbPort);
+		//	rs = rkvc.findSetStream(sguid, "?", "?");
+		//} catch (IllegalArgumentException | ClassNotFoundException | IllegalAccessException | IOException e1) {
+		//	throw new RuntimeException(e1);
+		//}
+		datasetSize = (int) Stream.of().count();
 		imageVecs = new double[datasetSize][];
 		imageLabels = new String[datasetSize];
 		imageFiles = new String[datasetSize];
-		rs.of().forEach(e -> {
+		Stream.of().forEach(e -> {
 			Comparable[] c = (Comparable[])e;
 			Object[] o = ((ArgumentInstances)c[1]).argInst;
 			imageVecs[ivec] = new double[o.length];
@@ -391,15 +385,14 @@ public class xferlearn extends NeurosomeTransferFunction {
 	* Concatenate original solver and evolved solver from result of this evolutionary run.
 	* Old solver is preserved from above loading in init()
 	* Store it in Db to which client is connected
-	* @param ro The client of remote db to store new solver
 	* @param ind the new best individual from runs.
 	* @return true if improvement of passed best solver concatenated with stored solver exceeds improvementThreshold value as percentage over stored solver
 	*/
-	public boolean transfer(RelatrixClientInterface ro, NeurosomeInterface ind) {
+	public boolean transfer(NeurosomeInterface ind) {
 		NeurosomeInterface newSolver = solver.concat(ind);
 		boolean isBetter = xferTests(newSolver);
-		if(ro != null && isBetter) {
-			Storage.storeSolver(ro, newSolver);
+		if(isBetter) {
+			Storage.storeSolver(newSolver, LoadProperties.sxferDb);
 		}
 		return isBetter;
 	}
