@@ -9,8 +9,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Stream;
 
-import com.neocoretechs.neurovolve.NeuralNetCu;
-import com.neocoretechs.neurovolve.NeurosomeCu;
+
 import com.neocoretechs.neurovolve.NeurosomeInterface;
 import com.neocoretechs.neurovolve.activation.ActivationInterface;
 import com.neocoretechs.neurovolve.activation.SoftMax;
@@ -22,7 +21,6 @@ import com.neocoretechs.neurovolve.worlds.World;
 
 import com.neocoretechs.relatrix.DuplicateKeyException;
 import com.neocoretechs.relatrix.client.RelatrixClient;
-import com.neocoretechs.relatrix.client.RemoteStream;
 
 import cnn.components.Plate;
 import cnn.driver.Dataset;
@@ -38,7 +36,7 @@ import cnn.tools.Util;
 public class xferlearn extends NeurosomeTransferFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
 	private static boolean DEBUG = false;
-	private static String prefix = "/media/jg/tensordisk/images/trainset/";//"D:/etc/images/trainset/";
+	private static String prefix = "D:/etc/images/trainset/";//"/media/jg/tensordisk/images/trainset/";//
 	//private static String localNode = "192.168.1.153";//"COREPLEX";
 	//private static String remoteNode = "192.168.1.153";//"COREPLEX";
 	private String sguid;
@@ -64,11 +62,17 @@ public class xferlearn extends NeurosomeTransferFunction {
 	public static int datasetSize = 0;
 	int ivec = 0;
 	public static double[][] imageVecs; // each image output from previous neurosome, as 1D vector
-	public static double[][] outputVecs; // each image output from previous neurosome, as 1D vector
+	//public static double[][] outputVecs; // each image output from previous neurosome, as 1D vector
+	public static ArrayList<nOutput> outputNeuros;
 	private static String[] imageLabels;
 	private static String[] imageFiles;
-	private static NeurosomeInterface solver = null;
+	//private static NeurosomeInterface solver = null;
 	private static double improvementThreshold = .1; //percentage of improvement to return true in comparison of accuracy
+	
+	static class nOutput {
+		String guid;
+		double[][] outputVecs;
+	}
 	
 	/**
 	 * This ctor gets called by default by Genome, overloaded ctor with guid will get called by GenomeTransfer
@@ -102,27 +106,25 @@ public class xferlearn extends NeurosomeTransferFunction {
 			LoadProperties.brandomizeActivation = false;
 			// retrieve original solver
 			//solver = (Neurosome) Storage.loadSolver(getWorld().getRemoteStorageClient(), sguid);
-			solver = (NeurosomeCu) Storage.loadSolver(sguid, LoadProperties.slearnDb);
-			if(solver == null) {
+			// if guid is 'all' load all
+			ArrayList<NeurosomeInterface> solvers = Storage.loadSolvers(sguid, LoadProperties.slearnDb);
+			if(solvers.isEmpty()) {
 				throw new RuntimeException("Could not locate "+sguid+" in stored solvers!");
 			}
-			solver.init();
-			// Now generate vectors of output of inference for stored solver to use as input to evolve
-			// new solvers
-		    for(int step = 0; step < getWorld().MaxSteps; step++) {
-		    	double[] outVec = solver.execute(imageVecs[step]);
-		    	outputVecs[step] = outVec;
-		    }
-		    // Make sure we set the activation function to be the same as original solver
-			LoadProperties.sactivationFunction = ((NeuralNetCu)solver).getActivationFunction().getClass().getName();
-			try {
-				LoadProperties.activate = (ActivationInterface) Class.forName(LoadProperties.sactivationFunction).newInstance();
-			} catch (SecurityException | ClassNotFoundException | InstantiationException | IllegalAccessException e) {
-				throw new RuntimeException(e);
+			outputNeuros = new ArrayList<nOutput>();
+			for(NeurosomeInterface solver: solvers) {
+				solver.init();
+				// Now generate vectors of output of inference for stored solver to use as input to evolve
+				// new solvers
+				nOutput noutput = new nOutput();
+				noutput.guid = solver.getName();
+				noutput.outputVecs = new double[(int)world.MaxSteps][];
+				for(int step = 0; step < getWorld().MaxSteps; step++) {
+					double[] outVec = solver.execute(imageVecs[step]);
+					noutput.outputVecs[step] = outVec;
+				}
+				outputNeuros.add(noutput);
 			}
-			System.out.println("Activation function set to "+LoadProperties.sactivationFunction);
-			// 
-	
 		}
 	}
 	    	
@@ -137,22 +139,33 @@ public class xferlearn extends NeurosomeTransferFunction {
         int errCount = 0;
 
         boolean[][] results = new boolean[(int)getWorld().MaxSteps][(int)getWorld().TestsPerStep];
-        double cost = 0;
+        double cost = Double.MAX_VALUE;
 	    for(int test = 0; test < getWorld().TestsPerStep ; test++) {
 	    	for(int step = 0; step < getWorld().MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
-	    		double[] outVec = ind.execute(outputVecs[step]);
-	    		double[] actual = softMax(outVec);
-	    		// expected is one-hot encoded for class
-	    		double expected = 0;
-	    		for(int j = 0; j < actual.length; j++) {
-	    			expected = categoryNames.get(j).equals(imageLabels[step]) ? 1 : 0;
-	    			cost += -(expected * Math.log(actual[j]) + (1 - expected) * Math.log(1 - actual[j]));
+	    		// all source neuros for this step against this target neuro
+	    		// find lowest cost
+	    		double costx = 0;
+	    		double[] bestOutVec = null;
+	    		for(nOutput noutput: outputNeuros) {
+	    			double[] outVec = ind.execute(noutput.outputVecs[step]);
+	    			double[] actual = softMax(outVec);
+	    			// expected is one-hot encoded for class
+	    			double expected = 0;
+	    			for(int j = 0; j < actual.length; j++) {
+	    				expected = categoryNames.get(j).equals(imageLabels[step]) ? 1 : 0;
+	    				costx += -(expected * Math.log(actual[j]) + (1 - expected) * Math.log(1 - actual[j]));
+	    			}
+	    			if(costx < cost) {
+	    				cost = costx;
+	    				bestOutVec = outVec;
+	    				setSourceGuid(noutput.guid);
+	    			}
 	    		}
-	    		String predicted = classify(outVec);
+	    		String predicted = classify(bestOutVec);
 	    		if(!predicted.equals(imageLabels[step])) {
 	    			//if(predicted.equals("N/A"))
-	    				//System.out.println("ENCOUNTERED N/A AT INDEX:"+step+" FOR:"+imageLabels[step]+" "+ind+" "+Thread.currentThread().getName()+" "+Arrays.toString(outVec));
+	    			//System.out.println("ENCOUNTERED N/A AT INDEX:"+step+" FOR:"+imageLabels[step]+" "+ind+" "+Thread.currentThread().getName()+" "+Arrays.toString(outVec));
 	    			errCount++;
 	    		} else {
 	    			++hits;
@@ -257,7 +270,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 	
 	private static void createImageVecs(World world, Dataset dataset) {
 	    imageVecs = new double[(int)world.MaxSteps][];
-	    outputVecs = new double[(int)world.MaxSteps][];
+	    //outputVecs = new double[(int)world.MaxSteps][];
 	    imageLabels = new String[(int)world.MaxSteps];
 	    imageFiles = new String[(int)world.MaxSteps];
 	    List<Instance> images = dataset.getImages();
@@ -388,11 +401,12 @@ public class xferlearn extends NeurosomeTransferFunction {
 	* @param ind the new best individual from runs.
 	* @return true if improvement of passed best solver concatenated with stored solver exceeds improvementThreshold value as percentage over stored solver
 	*/
-	public boolean transfer(NeurosomeInterface ind) {
+	public boolean transfer(NeurosomeInterface ind, NeurosomeInterface solver) {
 		NeurosomeInterface newSolver = solver.concat(ind);
-		boolean isBetter = xferTests(newSolver);
+		boolean isBetter = xferTests(newSolver, solver);
 		if(isBetter) {
 			Storage.storeSolver(newSolver, LoadProperties.sxferDb);
+			System.out.println(ind.getRepresentation()+" transfer data stored.");
 		}
 		return isBetter;
 	}
@@ -403,7 +417,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 	 * @param nt The new concatenated Neurosome from Solver + best fit
 	 * @return true if passed Neurosome is more accurate by given threshold. 
 	 */
-	public boolean xferTests(NeurosomeInterface nt)  {
+	public boolean xferTests(NeurosomeInterface nt, NeurosomeInterface solver)  {
 		int nInErr = 0;
 		int oInErr = 0;
 		int total = 0;

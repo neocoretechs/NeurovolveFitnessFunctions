@@ -34,7 +34,7 @@ import cnn.tools.Util;
 public class imgclf extends NeurosomeTransferFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
 	private static boolean DEBUG = false;
-	private static String prefix = "/media/jg/tensordisk/images/trainset/";//"D:/etc/images/trainset/";
+	private static String prefix = "D:/etc/images/trainset/";//"/media/jg/tensordisk/images/trainset/";
     //private static Object mutex = new Object();
     private static float breakOnAccuracyPercentage = .7f; // set to 0 for 100% accuracy expected
 	//Dataset dataset;
@@ -249,17 +249,11 @@ public class imgclf extends NeurosomeTransferFunction {
 	@Override
 	/**
 	 * Generates transfer learning multi task data. Alternate to generation from image directory.
-	 * Requires alternate Relatrix database besides 2 K/V stores for neurosome.
-	 * Would be called from RelatrixTransferWorld upon completion of initial stage, otherwise we
-	 * are generating a Neurosome to K/V store in standard RelatrixWorld, then using xferlearn fitness function
-	 * with init that loads from image directory.
 	 * Generates output from each inference of passed neurosome against imageVecs training data.
-	 * Writes each output vector to db client with GUID->image file name->output node vector for inferenced image.
-	 * @param ro RelatrixClient for data storage, must be seperate from main solver storage.
 	 * @param ind Neurosome to perform inference with each imageVecs vector
 	 * @return true since this function can also be used to continue until we reach a threshold, but here just return true to stop.
 	 */
-	public boolean transfer(NeurosomeInterface ind) {
+	public boolean transfer(NeurosomeInterface ind, NeurosomeInterface indo) {
 		for (int step = 0; step < imageVecs.length; step++) {
 			double[] outNeuro = ind.execute(imageVecs[step]);
 			//System.out.println(/*"Input "+img.toString()+*/" Output:"+Arrays.toString(outNeuro));
