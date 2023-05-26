@@ -71,6 +71,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 	
 	static class nOutput {
 		String guid;
+		double cost;
 		double[][] outputVecs;
 	}
 	
@@ -107,11 +108,16 @@ public class xferlearn extends NeurosomeTransferFunction {
 			// retrieve original solver
 			//solver = (Neurosome) Storage.loadSolver(getWorld().getRemoteStorageClient(), sguid);
 			// if guid is 'all' load all
+			long stim = System.currentTimeMillis();
+			System.out.println("Loading solver(s)...");
 			ArrayList<NeurosomeInterface> solvers = Storage.loadSolvers(sguid, LoadProperties.slearnDb);
 			if(solvers.isEmpty()) {
 				throw new RuntimeException("Could not locate "+sguid+" in stored solvers!");
 			}
+			System.out.println("Solver(s) loaded in "+(System.currentTimeMillis()-stim)+" ms.");
 			outputNeuros = new ArrayList<nOutput>();
+			System.out.println("Building vector(s)...");
+			stim = System.currentTimeMillis();
 			for(NeurosomeInterface solver: solvers) {
 				solver.init();
 				// Now generate vectors of output of inference for stored solver to use as input to evolve
@@ -125,6 +131,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 				}
 				outputNeuros.add(noutput);
 			}
+			System.out.println(outputNeuros.size()+" Vector(s) built in in "+(System.currentTimeMillis()-stim)+" ms.");
 		}
 	}
 	    	
@@ -140,25 +147,31 @@ public class xferlearn extends NeurosomeTransferFunction {
 
         boolean[][] results = new boolean[(int)getWorld().MaxSteps][(int)getWorld().TestsPerStep];
         double cost = Double.MAX_VALUE;
+		double[] bestOutVec = null;
 	    for(int test = 0; test < getWorld().TestsPerStep ; test++) {
 	    	for(int step = 0; step < getWorld().MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
 	    		// all source neuros for this step against this target neuro
 	    		// find lowest cost
-	    		double costx = 0;
-	    		double[] bestOutVec = null;
 	    		for(nOutput noutput: outputNeuros) {
+	    			// execute our current individual child candidate with our source candidate output vector
 	    			double[] outVec = ind.execute(noutput.outputVecs[step]);
 	    			double[] actual = softMax(outVec);
 	    			// expected is one-hot encoded for class
 	    			double expected = 0;
 	    			for(int j = 0; j < actual.length; j++) {
 	    				expected = categoryNames.get(j).equals(imageLabels[step]) ? 1 : 0;
-	    				costx += -(expected * Math.log(actual[j]) + (1 - expected) * Math.log(1 - actual[j]));
+	    				noutput.cost += -(expected * Math.log(actual[j]) + (1 - expected) * Math.log(1 - actual[j]));
 	    			}
-	    			if(costx < cost) {
-	    				cost = costx;
-	    				bestOutVec = outVec;
+	    		}
+	    		// Now we have array of costs for this image for all sources, find the lowest cumulative 
+	    		// cost for images to this point.
+	    		// Each test image is a step
+	    		for(nOutput noutput: outputNeuros) {
+	    			if(noutput.cost < cost) {
+	    				cost = noutput.cost;
+	    				bestOutVec = noutput.outputVecs[step];
+	    				// set our best candidate source guid to lowest cost so far
 	    				setSourceGuid(noutput.guid);
 	    			}
 	    		}
