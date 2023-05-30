@@ -35,7 +35,7 @@ import cnn.tools.Util;
  */
 public class xferlearn extends NeurosomeTransferFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
-	private static boolean DEBUG = false;
+	private static boolean DEBUG = true;
 	private static String prefix = "D:/etc/images/trainset/";//"/media/jg/tensordisk/images/trainset/";//
 	//private static String localNode = "192.168.1.153";//"COREPLEX";
 	//private static String remoteNode = "192.168.1.153";//"COREPLEX";
@@ -71,7 +71,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 	
 	static class nOutput {
 		String guid;
-		double cost;
+		ActivationInterface[] activations; // each layer of source
 		double[][] outputVecs;
 	}
 	
@@ -99,8 +99,6 @@ public class xferlearn extends NeurosomeTransferFunction {
 		if(datasetSize == 0) {
 			Dataset dataset = Util.loadDataset(new File(prefix), null, false);
 			datasetSize = dataset.getSize();
-			// MinRawFitness is steps * testPerStep args one and two of setStepFactors
-			getWorld().setStepFactors((float)datasetSize, 1.0f);
 			System.out.printf("Dataset from %s loaded with %d images%n", prefix, datasetSize);
 			createImageVecs(getWorld(), dataset);
 			// set the properties to hardwire the source activation function
@@ -114,7 +112,9 @@ public class xferlearn extends NeurosomeTransferFunction {
 			if(solvers.isEmpty()) {
 				throw new RuntimeException("Could not locate "+sguid+" in stored solvers!");
 			}
-			System.out.println("Solver(s) loaded in "+(System.currentTimeMillis()-stim)+" ms.");
+			System.out.println(solvers.size()+" Solver(s) loaded in "+(System.currentTimeMillis()-stim)+" ms.");
+			// MinRawFitness is steps * testPerStep args one and two of setStepFactors
+			getWorld().setStepFactors((float)datasetSize, (float)solvers.size());
 			outputNeuros = new ArrayList<nOutput>();
 			System.out.println("Building vector(s)...");
 			stim = System.currentTimeMillis();
@@ -124,8 +124,12 @@ public class xferlearn extends NeurosomeTransferFunction {
 				// new solvers
 				nOutput noutput = new nOutput();
 				noutput.guid = solver.getName();
-				noutput.outputVecs = new double[(int)world.MaxSteps][];
-				for(int step = 0; step < getWorld().MaxSteps; step++) {
+				noutput.activations = new ActivationInterface[solver.getLayers()];
+				for(int i = 0; i < solver.getLayers(); i++) {
+					noutput.activations[i] = solver.getActivationFunction(i);
+				}
+				noutput.outputVecs = new double[datasetSize][];
+				for(int step = 0; step < datasetSize; step++) {
 					double[] outVec = solver.execute(imageVecs[step]);
 					noutput.outputVecs[step] = outVec;
 				}
@@ -144,38 +148,28 @@ public class xferlearn extends NeurosomeTransferFunction {
 		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
 	 	float hits = 0;
         int errCount = 0;
-
+        double[] nCost = new double[(int)getWorld().TestsPerStep];
         boolean[][] results = new boolean[(int)getWorld().MaxSteps][(int)getWorld().TestsPerStep];
-        double cost = Double.MAX_VALUE;
-		double[] bestOutVec = null;
 	    for(int test = 0; test < getWorld().TestsPerStep ; test++) {
+	        double cost = Double.MAX_VALUE;
+    		// all source neuros for this step against this target neuro
+    		// find lowest cost
+	    	nOutput noutput = outputNeuros.get(test);
+			// set the activation function to original solver
+			for(int i = 0; i < noutput.activations.length; i++)
+				ind.setActivationFunction(i,noutput.activations[i]);
 	    	for(int step = 0; step < getWorld().MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
-	    		// all source neuros for this step against this target neuro
-	    		// find lowest cost
-	    		for(nOutput noutput: outputNeuros) {
-	    			// execute our current individual child candidate with our source candidate output vector
-	    			double[] outVec = ind.execute(noutput.outputVecs[step]);
-	    			double[] actual = softMax(outVec);
-	    			// expected is one-hot encoded for class
-	    			double expected = 0;
-	    			for(int j = 0; j < actual.length; j++) {
-	    				expected = categoryNames.get(j).equals(imageLabels[step]) ? 1 : 0;
-	    				noutput.cost += -(expected * Math.log(actual[j]) + (1 - expected) * Math.log(1 - actual[j]));
-	    			}
+	    		// execute our current individual child candidate with our source candidate output vector
+	    		double[] outVec = ind.execute(noutput.outputVecs[step]);
+	    		double[] actual = softMax(outVec);
+	    		// expected is one-hot encoded for class
+	    		double expected = 0;
+	    		for(int j = 0; j < actual.length; j++) {
+	    			expected = categoryNames.get(j).equals(imageLabels[step]) ? 1 : 0;
+	    			nCost[test] += -(expected * Math.log(actual[j]) + (1 - expected) * Math.log(1 - actual[j]));
 	    		}
-	    		// Now we have array of costs for this image for all sources, find the lowest cumulative 
-	    		// cost for images to this point.
-	    		// Each test image is a step
-	    		for(nOutput noutput: outputNeuros) {
-	    			if(noutput.cost < cost) {
-	    				cost = noutput.cost;
-	    				bestOutVec = noutput.outputVecs[step];
-	    				// set our best candidate source guid to lowest cost so far
-	    				setSourceGuid(noutput.guid);
-	    			}
-	    		}
-	    		String predicted = classify(bestOutVec);
+	    		String predicted = classify(outVec);
 	    		if(!predicted.equals(imageLabels[step])) {
 	    			//if(predicted.equals("N/A"))
 	    			//System.out.println("ENCOUNTERED N/A AT INDEX:"+step+" FOR:"+imageLabels[step]+" "+ind+" "+Thread.currentThread().getName()+" "+Arrays.toString(outVec));
@@ -186,8 +180,24 @@ public class xferlearn extends NeurosomeTransferFunction {
 	    		}
 	    	}
 	    }
-	    if(Double.isNaN(cost))
-	    	cost = Double.MAX_VALUE/2;
+	    //
+        double cost = Double.MAX_VALUE;
+	    for(int test = 0; test < getWorld().TestsPerStep ; test++) {
+    		// all source neuros for this step against this target neuro
+    		// find lowest cost
+	    	nOutput noutput = outputNeuros.get(test);
+		    if(Double.isNaN(nCost[test]))
+		    	nCost[test] = Double.MAX_VALUE/2;
+		    if(DEBUG)
+		    	System.out.println("cost "+test+"="+nCost[test]+" ind="+ind+" source="+noutput.guid);
+	    	if(nCost[test] < cost) {
+	    		cost = nCost[test];
+	    		// set our best candidate source guid to lowest cost so far
+	    		setSourceGuid(noutput.guid);
+			    if(DEBUG)
+			    	System.out.println("set lowest cost "+test+"="+nCost[test]+" ind="+ind+" source="+noutput.guid);
+	    	}
+	    }
 
 	    //cost = ind.weightDecay(cost, .00001);
 
@@ -282,12 +292,12 @@ public class xferlearn extends NeurosomeTransferFunction {
 	}
 	
 	private static void createImageVecs(World world, Dataset dataset) {
-	    imageVecs = new double[(int)world.MaxSteps][];
-	    //outputVecs = new double[(int)world.MaxSteps][];
-	    imageLabels = new String[(int)world.MaxSteps];
-	    imageFiles = new String[(int)world.MaxSteps];
 	    List<Instance> images = dataset.getImages();
-    	for(int step = 0; step < world.MaxSteps; step++) {
+	    imageVecs = new double[images.size()][];
+	    //outputVecs = new double[images.size()][];
+	    imageLabels = new String[images.size()];
+	    imageFiles = new String[images.size()];
+    	for(int step = 0; step < images.size(); step++) {
     		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
     		Instance img = images.get(step);
     		Plate[] plates = instanceToPlate(img);
