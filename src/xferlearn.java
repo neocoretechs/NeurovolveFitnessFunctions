@@ -35,8 +35,8 @@ import cnn.tools.Util;
  */
 public class xferlearn extends NeurosomeTransferFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
-	private static boolean DEBUG = true;
-	private static String prefix = "D:/etc/images/trainset/";//"/media/jg/tensordisk/images/trainset/";//
+	private static boolean DEBUG = false;
+	private static String prefix = "D:/etc/images/trainset/";//"/media/jg/tensordisk/images/trainset/";
 	//private static String localNode = "192.168.1.153";//"COREPLEX";
 	//private static String remoteNode = "192.168.1.153";//"COREPLEX";
 	private String sguid;
@@ -146,17 +146,16 @@ public class xferlearn extends NeurosomeTransferFunction {
 	public Object execute(NeurosomeInterface ind) {
 		//Long tim = System.currentTimeMillis();
 		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
-	 	float hits = 0;
-        int errCount = 0;
+	 	//float hits = 0;
+        //int errCount = 0;
         double[] nCost = new double[(int)getWorld().TestsPerStep];
-        boolean[][] results = new boolean[(int)getWorld().MaxSteps][(int)getWorld().TestsPerStep];
+        //boolean[][] results = new boolean[(int)getWorld().MaxSteps][(int)getWorld().TestsPerStep];
 	    for(int test = 0; test < getWorld().TestsPerStep ; test++) {
-	        double cost = Double.MAX_VALUE;
     		// all source neuros for this step against this target neuro
     		// find lowest cost
 	    	nOutput noutput = outputNeuros.get(test);
 			// set the activation function to original solver
-			for(int i = 0; i < noutput.activations.length; i++)
+			for(int i = 0; i < ind.getLayers(); i++)
 				ind.setActivationFunction(i,noutput.activations[i]);
 	    	for(int step = 0; step < getWorld().MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
@@ -169,15 +168,15 @@ public class xferlearn extends NeurosomeTransferFunction {
 	    			expected = categoryNames.get(j).equals(imageLabels[step]) ? 1 : 0;
 	    			nCost[test] += -(expected * Math.log(actual[j]) + (1 - expected) * Math.log(1 - actual[j]));
 	    		}
-	    		String predicted = classify(outVec);
-	    		if(!predicted.equals(imageLabels[step])) {
+	    		//String predicted = classify(outVec, actual);
+	    		//if(!predicted.equals(imageLabels[step])) {
 	    			//if(predicted.equals("N/A"))
 	    			//System.out.println("ENCOUNTERED N/A AT INDEX:"+step+" FOR:"+imageLabels[step]+" "+ind+" "+Thread.currentThread().getName()+" "+Arrays.toString(outVec));
-	    			errCount++;
-	    		} else {
-	    			++hits;
-	    			results[step][test] = true;
-	    		}
+	    			//errCount++;
+	    		//} else {
+	    		//	++hits;
+	    			//results[step][test] = true;
+	    		//}
 	    	}
 	    }
 	    //
@@ -201,20 +200,17 @@ public class xferlearn extends NeurosomeTransferFunction {
 
 	    //cost = ind.weightDecay(cost, .00001);
 
-		if(World.SHOWTRUTH)
-			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/world.MinCost)*100+"%");
-         // rawFit = world.MinRawFitness - hits;
-         // break at predetermined accuracy level? adjust rawfit to 0 on that mark
-         // MaxSteps * TestsPerStep is MinRawFitness. hits / MinRawFitness  = percentage passed
-         if( breakOnAccuracyPercentage > 0 && (hits/(world.MaxSteps*world.TestsPerStep)) >= breakOnAccuracyPercentage) {
-        	 getWorld().showTruth(ind, cost, results);
-        	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/(getWorld().MaxSteps*getWorld().TestsPerStep))*100+"%.");
+		//if(World.SHOWTRUTH)
+			//System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/world.MinCost)*100+"%");
+         //if( breakOnAccuracyPercentage > 0 && (hits/(world.MaxSteps*world.TestsPerStep)) >= breakOnAccuracyPercentage) {
+        	 //getWorld().showTruth(ind, cost, results);
+        	 //System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/(getWorld().MaxSteps*getWorld().TestsPerStep))*100+"%.");
         	 //if(world.getRemoteStorageClient() != null) {
         		 //Storage.storeSolver(world.getRemoteStorageClient(), ind);
         	 //}
-         } else {
-        	 getWorld().showTruth(ind, cost, results);
-         }
+         //} else {
+        	 //getWorld().showTruth(ind, cost, results);
+         //}
      	 //System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
          return cost;
 	}
@@ -232,6 +228,21 @@ public class xferlearn extends NeurosomeTransferFunction {
 				//smax = Double.MIN_VALUE;
 			if (smax > maxProb) {
 				maxProb = smax;
+				bestIndex = i;
+			}
+		}
+		if(bestIndex == -1)
+			return "N/A";
+		return categoryNames.get(bestIndex);
+	}
+	
+	/** Returns the predicted label for the image. */
+	public static String classify(double[] dprobs, double[] sf) {
+		double maxProb = -1;
+		int bestIndex = -1;
+		for (int i = 0; i < dprobs.length; i++) {
+			if (sf[i] > maxProb) {
+				maxProb = sf[i];
 				bestIndex = i;
 			}
 		}

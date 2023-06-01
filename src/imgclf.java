@@ -34,7 +34,7 @@ import cnn.tools.Util;
 public class imgclf extends NeurosomeTransferFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
 	private static boolean DEBUG = false;
-	private static String prefix = "D:/etc/images/trainset/";//"/media/jg/tensordisk/images/trainset/";
+	private static String prefix = "/media/jg/tensordisk/images/trainset/";//"D:/etc/images/trainset/";//
     //private static Object mutex = new Object();
     private static float breakOnAccuracyPercentage = .7f; // set to 0 for 100% accuracy expected
 	//Dataset dataset;
@@ -92,18 +92,15 @@ public class imgclf extends NeurosomeTransferFunction {
 	public Object execute(NeurosomeInterface ind) {
 		//Long tim = System.currentTimeMillis();
 		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
-	 	float hits = 0;
-        int errCount = 0;
+	 	//float hits = 0;
+        //int errCount = 0;
 
-        boolean[][] results = new boolean[(int)getWorld().MaxSteps][(int)getWorld().TestsPerStep];
+        //boolean[][] results = new boolean[(int)getWorld().MaxSteps][(int)getWorld().TestsPerStep];
         double cost = 0;
 	    for(int test = 0; test < getWorld().TestsPerStep ; test++) {
 	    	for(int step = 0; step < getWorld().MaxSteps; step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
 	    		double[] outVec = ind.execute(imageVecs[step]);
-	    		//for(int i = 0; i < outVec.length; i++)
-	    			//if(Double.isNaN(outVec[i]))
-	    				//outVec[i] = Double.MIN_VALUE;
 	    		double[] actual = softMax(outVec);
 	    		// expected is one-hot encoded for class
 	    		double expected = 0;
@@ -111,15 +108,15 @@ public class imgclf extends NeurosomeTransferFunction {
 	    			expected = categoryNames.get(j).equals(imageLabels[step]) ? 1 : 0;
 	    			cost += -(expected * Math.log(actual[j]) + (1 - expected) * Math.log(1 - actual[j]));
 	    		}
-	    		String predicted = classify(outVec);
-	    		if(!predicted.equals(imageLabels[step])) {
+	    		//String predicted = classify(outVec, actual);
+	    		//if(!predicted.equals(imageLabels[step])) {
 	    			//if(predicted.equals("N/A"))
 	    				//System.out.println("ENCOUNTERED N/A AT INDEX:"+step+" FOR:"+imageLabels[step]+" "+ind+" "+Thread.currentThread().getName()+" "+Arrays.toString(outVec));
-	    			errCount++;
-	    		} else {
-	    			++hits;
-	    			results[step][test] = true;
-	    		}
+	    			//errCount++;
+	    		//} else {
+	    			//++hits;
+	    			//results[step][test] = true;
+	    		//}
 	    	}
 	    }
 	    if(/*cost < 0 || Double.isInfinite(cost) ||*/ Double.isNaN(cost))
@@ -127,17 +124,16 @@ public class imgclf extends NeurosomeTransferFunction {
 
 	    //cost = ind.weightDecay(cost, .00001);
 
+	    /*
 		if(World.SHOWTRUTH)
 			System.out.println("ind:"+ind+" hits:"+hits+" err:"+errCount+" "+(hits/ind.getWorld().MinCost)*100+"%");
-         // rawFit = world.MinRawFitness - hits;
-         // break at predetermined accuracy level? adjust rawfit to 0 on that mark
-         // MaxSteps * TestsPerStep is MinRawFitness. hits / MinRawFitness  = percentage passed
          if( breakOnAccuracyPercentage > 0 && (hits/(getWorld().MaxSteps*getWorld().TestsPerStep)) >= breakOnAccuracyPercentage) {
         	 getWorld().showTruth(ind, cost, results);
         	 System.out.println("Fitness function accuracy of "+breakOnAccuracyPercentage*100+"% equaled/surpassed by "+(hits/(getWorld().MaxSteps*getWorld().TestsPerStep))*100+"%.");
          } else {
         	 getWorld().showTruth(ind, cost, results);
          }
+         */
      	 //System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
          return cost;
 	}
@@ -155,6 +151,21 @@ public class imgclf extends NeurosomeTransferFunction {
 				//smax = Double.MIN_VALUE;
 			if (smax > maxProb) {
 				maxProb = smax;
+				bestIndex = i;
+			}
+		}
+		if(bestIndex == -1)
+			return "N/A";
+		return categoryNames.get(bestIndex);
+	}
+	
+	/** Returns the predicted label for the image. */
+	public static String classify(double[] dprobs, double[] sf) {
+		double maxProb = -1;
+		int bestIndex = -1;
+		for (int i = 0; i < dprobs.length; i++) {
+			if (sf[i] > maxProb) {
+				maxProb = sf[i];
 				bestIndex = i;
 			}
 		}
