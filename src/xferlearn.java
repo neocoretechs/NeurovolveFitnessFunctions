@@ -5,15 +5,19 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
-
+import com.neocoretechs.neurovolve.GPListenerInterface;
 import com.neocoretechs.neurovolve.NeurosomeInterface;
 import com.neocoretechs.neurovolve.activation.ActivationInterface;
 import com.neocoretechs.neurovolve.activation.SoftMax;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeTransferFunction;
+import com.neocoretechs.neurovolve.multiprocessing.SynchronizedFixedThreadPoolManager;
 import com.neocoretechs.neurovolve.properties.LoadProperties;
 import com.neocoretechs.neurovolve.relatrix.Storage;
 import com.neocoretechs.neurovolve.relatrix.ArgumentInstances;
@@ -36,7 +40,7 @@ import cnn.tools.Util;
 public class xferlearn extends NeurosomeTransferFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
 	private static boolean DEBUG = false;
-	private static String prefix = "D:/etc/images/trainset/";//"/media/jg/tensordisk/images/trainset/";
+	private static String prefix = "C:/etc/images/trainset/";//"/media/jg/tensordisk/images/trainset/";
 	//private static String localNode = "192.168.1.153";//"COREPLEX";
 	//private static String remoteNode = "192.168.1.153";//"COREPLEX";
 	private String sguid;
@@ -63,9 +67,10 @@ public class xferlearn extends NeurosomeTransferFunction {
 	int ivec = 0;
 	public static double[][] imageVecs; // each image output from previous neurosome, as 1D vector
 	//public static double[][] outputVecs; // each image output from previous neurosome, as 1D vector
-	public static ArrayList<nOutput> outputNeuros;
+	public static List<nOutput> outputNeuros;
 	private static String[] imageLabels;
 	private static String[] imageFiles;
+	private static AtomicInteger threadIndex = new AtomicInteger(0);
 	//private static NeurosomeInterface solver = null;
 	private static double improvementThreshold = .1; //percentage of improvement to return true in comparison of accuracy
 	
@@ -115,9 +120,10 @@ public class xferlearn extends NeurosomeTransferFunction {
 			System.out.println(solvers.size()+" Solver(s) loaded in "+(System.currentTimeMillis()-stim)+" ms.");
 			// MinRawFitness is steps * testPerStep args one and two of setStepFactors
 			getWorld().setStepFactors((float)datasetSize, (float)solvers.size());
-			outputNeuros = new ArrayList<nOutput>();
+			outputNeuros = Collections.synchronizedList(new ArrayList<nOutput>());
 			System.out.println("Building vector(s)...");
 			stim = System.currentTimeMillis();
+			/*
 			for(NeurosomeInterface solver: solvers) {
 				solver.init();
 				// Now generate vectors of output of inference for stored solver to use as input to evolve
@@ -135,6 +141,33 @@ public class xferlearn extends NeurosomeTransferFunction {
 				}
 				outputNeuros.add(noutput);
 			}
+			*/
+			Future<?>[] jobs = new Future[solvers.size()];
+			threadIndex.set(0);
+			for(int i = 0; i < solvers.size(); i++) {
+			    	jobs[i] = SynchronizedFixedThreadPoolManager.submit(new Runnable() {
+			    		@Override
+			    		public void run() {
+			    		    NeurosomeInterface solver = solvers.get(threadIndex.getAndIncrement());
+			    			solver.init();
+							// Now generate vectors of output of inference for stored solver to use as input to evolve
+							// new solvers
+							nOutput noutput = new nOutput();
+							noutput.guid = solver.getName();
+							noutput.activations = new ActivationInterface[solver.getLayers()];
+							for(int i = 0; i < solver.getLayers(); i++) {
+								noutput.activations[i] = solver.getActivationFunction(i);
+							}
+							noutput.outputVecs = new double[datasetSize][];
+							for(int step = 0; step < datasetSize; step++) {
+								double[] outVec = solver.execute(imageVecs[step]);
+								noutput.outputVecs[step] = outVec;
+							}
+							outputNeuros.add(noutput);
+			    		} // run
+			    	},"COMPUTE"); // spin
+			} 
+			SynchronizedFixedThreadPoolManager.waitForCompletion(jobs);
 			System.out.println(outputNeuros.size()+" Vector(s) built in in "+(System.currentTimeMillis()-stim)+" ms.");
 		}
 	}
@@ -144,8 +177,8 @@ public class xferlearn extends NeurosomeTransferFunction {
 	 * Compute cross entropy loss, return cost
 	 */
 	public Object execute(NeurosomeInterface ind) {
-		//Long tim = System.currentTimeMillis();
-		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
+		Long tim = System.currentTimeMillis();
+		System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
 	 	//float hits = 0;
         //int errCount = 0;
         double[] nCost = new double[(int)getWorld().TestsPerStep];
@@ -211,7 +244,7 @@ public class xferlearn extends NeurosomeTransferFunction {
          //} else {
         	 //getWorld().showTruth(ind, cost, results);
          //}
-     	 //System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
+     	 System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
          return cost;
 	}
 
@@ -437,10 +470,14 @@ public class xferlearn extends NeurosomeTransferFunction {
 	*/
 	public boolean transfer(NeurosomeInterface ind, NeurosomeInterface solver) {
 		NeurosomeInterface newSolver = solver.concat(ind);
+		System.out.println("\r\n>>Concatenating parent: "+solver.getRepresentation()+"\r\n>>With child: "+ind.getRepresentation()+"\r\n>>Producing: "+newSolver.getRepresentation());
 		boolean isBetter = xferTests(newSolver, solver);
 		if(isBetter) {
+			System.out.println("Which rose above improvement threshold of "+improvementThreshold);
 			Storage.storeSolver(newSolver, LoadProperties.sxferDb);
-			System.out.println(ind.getRepresentation()+" transfer data stored.");
+			System.out.println("*** transfer data stored.***");
+		} else {
+			System.out.println("Which fell below improvement threshold of "+improvementThreshold);
 		}
 		return isBetter;
 	}
