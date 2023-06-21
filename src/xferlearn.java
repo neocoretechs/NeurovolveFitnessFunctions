@@ -178,7 +178,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 	 */
 	public Object execute(NeurosomeInterface ind) {
 		Long tim = System.currentTimeMillis();
-		System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
+		System.out.println("Exec "+Thread.currentThread().getName()+" id:"+Thread.currentThread().getId()+" for ind "+ind.getName());
 	 	//float hits = 0;
         //int errCount = 0;
         double[] nCost = new double[(int)getWorld().TestsPerStep];
