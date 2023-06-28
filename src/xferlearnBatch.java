@@ -65,11 +65,14 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 	
 	public static int datasetSize = 0;
 	int ivec = 0;
-	public static double[][] imageVecs; // each image output from previous neurosome, as 1D vector
+	public static ArrayList<double[][]> imageVecs; // each image output from previous neurosome, as 1D vector
 	//public static double[][] outputVecs; // each image output from previous neurosome, as 1D vector
 	public static List<nOutput> outputNeuros;
-	private static String[] imageLabels;
-	private static String[] imageFiles;
+	private static ArrayList<String[]> imageLabels;
+	private static ArrayList<String[]> imageFiles;
+    private static double[][] imageVecsArray = null;
+    private static String[] imageLabelsArray = null;
+    private static String[] imageFilesArray = null;
 	private static AtomicInteger threadIndex = new AtomicInteger(0);
 	//private static NeurosomeInterface solver = null;
 	private static double improvementThreshold = .1; //percentage of improvement to return true in comparison of accuracy
@@ -77,7 +80,7 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 	static class nOutput {
 		String guid;
 		ActivationInterface[] activations; // each layer of source
-		double[][] outputVecs;
+		ArrayList<double[][]> outputVecs;
 	}
 	
 	/**
@@ -119,9 +122,13 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 			}
 			System.out.println(solvers.size()+" Solver(s) loaded in "+(System.currentTimeMillis()-stim)+" ms.");
 			// MinRawFitness is steps * testPerStep args one and two of setStepFactors
-			getWorld().setStepFactors((float)datasetSize, (float)solvers.size());
+			//getWorld().setStepFactors((float)datasetSize, (float)solvers.size());
 			outputNeuros = Collections.synchronizedList(new ArrayList<nOutput>());
 			System.out.println("Building vector(s)...");
+			// We can only use 1 CUDA thread initially due to high inital memory requirements using original solvers
+			// Once transfer starts, we can increase thread level
+			int permThreads = LoadProperties.iCUDAThreads;
+			LoadProperties.iCUDAThreads = 1;
 			stim = System.currentTimeMillis();
 			/*
 			for(NeurosomeInterface solver: solvers) {
@@ -142,6 +149,12 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 				outputNeuros.add(noutput);
 			}
 			*/
+			//
+			// Generate the full set of tests for each solver. The tests are chunked based on maximum batch size
+			// and this is all set up in the createImageVecs method previously executed above.
+			// The noutput.outputVecs list is chunked in the same manner are the test images, but these outputVecs
+			// are the result of executing the batched tests against the solver contained in the noutput structure.
+			//
 			Future<?>[] jobs = new Future[solvers.size()];
 			threadIndex.set(0);
 			for(int i = 0; i < solvers.size(); i++) {
@@ -158,22 +171,32 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 							for(int i = 0; i < solver.getLayers(); i++) {
 								noutput.activations[i] = solver.getActivationFunction(i);
 							}
-							noutput.outputVecs = new double[datasetSize][];
+							noutput.outputVecs = new ArrayList<double[][]>(imageVecs.size());
 							/*
 							for(int step = 0; step < datasetSize; step++) {
 								double[] outVec = solver.execute(imageVecs[step]);
 								noutput.outputVecs[step] = outVec;
 							}
 							*/
-							ArrayList<double[]> resVecs = solver.execute(imageVecs);
-							for(int step = 0; step < datasetSize; step++) {
-								noutput.outputVecs[step] = resVecs.get(step);
-							}
+							// We have the image tests chunked for maximum batch size for each test.
+							// Perform the batched chunk, get the results, then chunk them the same way in the
+							// output vectors that will serve as inputs to the next round of batched chunks
+							// in the main test fitness function body below.
+						    for(int test = 0; test < imageVecs.size() ; test++) {
+						    	ArrayList<double[]> resVecs = solver.execute(imageVecs.get(test));
+								double[][] resArray = new double[resVecs.size()][];
+								for(int k = 0; k < resVecs.size(); k++) {
+									resArray[k] = resVecs.get(k);
+								}
+						    	noutput.outputVecs.add(resArray);
+						    }
 							outputNeuros.add(noutput);
 			    		} // run
 			    	},"COMPUTE"); // spin
 			} 
 			SynchronizedFixedThreadPoolManager.waitForCompletion(jobs);
+			// restore CUDA threads for transfer learning data level
+			LoadProperties.iCUDAThreads = permThreads;
 			System.out.println(outputNeuros.size()+" Vector(s) built in in "+(System.currentTimeMillis()-stim)+" ms.");
 		}
 	}
@@ -187,26 +210,40 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 		System.out.println("Exec "+Thread.currentThread().getName()+" id:"+Thread.currentThread().getId()+" for ind "+ind.getName());
 	 	//float hits = 0;
         //int errCount = 0;
-        double[] nCost = new double[(int)getWorld().TestsPerStep];
+        double[] nCost = new double[outputNeuros.size()];
         //boolean[][] results = new boolean[(int)getWorld().MaxSteps][(int)getWorld().TestsPerStep];
-	    for(int test = 0; test < getWorld().TestsPerStep ; test++) {
+        // outputNeuros is each parent Neurosome, and each one contains all tests batched to maximum GPU memory capacity
+	    for(int test = 0; test < outputNeuros.size() ; test++) {
     		// all source neuros for this step against this target neuro
     		// find lowest cost
 	    	nOutput noutput = outputNeuros.get(test);
-			// set the activation function to original solver
+			// set the current individual Neurosome activation function to original parent solver Neurosome activation function
 			for(int i = 0; i < ind.getLayers(); i++)
 				ind.setActivationFunction(i,noutput.activations[i]);
-	    	for(int step = 0; step < getWorld().MaxSteps; step++) {
+			// Perform each chunked test based on maximum batch size output vectors of parent neurosome we set up in init.
+			// noutput.outputVecs contains results of inference of parent Neurosome on images,
+			// batched as images were originally set up in createImageVecs.
+	    	for(int step = 0; step < noutput.outputVecs.size(); step++) {
 	    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
 	    		// execute our current individual child candidate with our source candidate output vector
-	    		double[] outVec = ind.execute(noutput.outputVecs[step]);
-	    		double[] actual = softMax(outVec);
+	    		ArrayList<double[]> outVecs = ind.execute(noutput.outputVecs.get(step));
+	    		// iterate through each batch result
+	        	for(int step2 = 0; step2 < outVecs.size(); step2++) {
+		    		double[] actual = softMax(outVecs.get(step2));
+		    		// expected is one-hot encoded for class
+		    		double expected = 0;
+		    		for(int j = 0; j < actual.length; j++) {
+		    			expected = categoryNames.get(j).equals(imageLabels.get(step)[step2]) ? 1 : 0;
+		    			nCost[test] += -(expected * Math.log(actual[j]) + (1 - expected) * Math.log(1 - actual[j]));
+		    		}
+	        	}
+	    		//double[] actual = softMax(outVec);
 	    		// expected is one-hot encoded for class
-	    		double expected = 0;
-	    		for(int j = 0; j < actual.length; j++) {
-	    			expected = categoryNames.get(j).equals(imageLabels[step]) ? 1 : 0;
-	    			nCost[test] += -(expected * Math.log(actual[j]) + (1 - expected) * Math.log(1 - actual[j]));
-	    		}
+	    		//double expected = 0;
+	    		//for(int j = 0; j < actual.length; j++) {
+	    			//expected = categoryNames.get(j).equals(imageLabels[step]) ? 1 : 0;
+	    			//nCost[test] += -(expected * Math.log(actual[j]) + (1 - expected) * Math.log(1 - actual[j]));
+	    		//}
 	    		//String predicted = classify(outVec, actual);
 	    		//if(!predicted.equals(imageLabels[step])) {
 	    			//if(predicted.equals("N/A"))
@@ -220,7 +257,7 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 	    }
 	    //
         double cost = Double.MAX_VALUE;
-	    for(int test = 0; test < getWorld().TestsPerStep ; test++) {
+	    for(int test = 0; test < outputNeuros.size() ; test++) {
     		// all source neuros for this step against this target neuro
     		// find lowest cost
 	    	nOutput noutput = outputNeuros.get(test);
@@ -342,22 +379,55 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 	}
 	
 	private static void createImageVecs(World world, Dataset dataset) {
+	    imageVecs = new ArrayList<double[][]>((int)world.TestsPerStep);
+	    imageLabels = new ArrayList<String[]>((int)world.TestsPerStep);
+	    imageFiles = new ArrayList<String[]>((int)world.TestsPerStep);
+
 	    List<Instance> images = dataset.getImages();
-	    imageVecs = new double[images.size()][];
-	    //outputVecs = new double[images.size()][];
-	    imageLabels = new String[images.size()];
-	    imageFiles = new String[images.size()];
-    	for(int step = 0; step < images.size(); step++) {
-    		//System.out.println("Test:"+test+"Step:"+step+" "+ind);
-    		Instance img = images.get(step);
-    		Plate[] plates = instanceToPlate(img);
-       		imageLabels[step] = img.getLabel();
-       		imageFiles[step] = img.getName();
-    		imageVecs[step] = packPlates(Arrays.asList(plates));
-    	}
+	    int maxImages = 0;
+	    if(world.TestsPerStep > images.size())
+	    	world.TestsPerStep = images.size();
+	    System.out.println("Tests per step = "+ world.TestsPerStep);
+	    // arrange entire test set into blocks in TestsPerStep which represents max number of tests per batch
+	    while(maxImages < images.size()) {
+	  		if((images.size() - maxImages) < world.TestsPerStep) {
+	  			imageVecsArray = new double[(images.size() - maxImages)][];
+	  			imageLabelsArray = new String[(images.size() - maxImages)];
+	  			imageFilesArray = new String[(images.size() - maxImages)];
+	  		} else {
+	  			imageVecsArray = new double[(int) world.TestsPerStep][];
+	  			imageLabelsArray = new String[(int) world.TestsPerStep];
+	  			imageFilesArray = new String[(int) world.TestsPerStep];	
+	  		}
+	  		for(int step = 0; step < imageFilesArray.length; step++) {
+	  			//System.out.println("Test:"+test+"Step:"+step+" "+ind);
+	  			Instance img = images.get(maxImages++);
+	  			Plate[] plates = instanceToPlate(img);
+	  			imageLabelsArray[step] = img.getLabel();
+	  			imageFilesArray[step] = img.getName();
+	  			imageVecsArray[step] = packPlates(Arrays.asList(plates));
+	  			/*
+    			float[] inFloat = new float[img.getWidth()*img.getHeight()];
+    			int[] dstBuff = new int[img.getWidth()*img.getHeight()];
+    			Instance.readLuminance(img.getImage(), dstBuff);
+    			int i = 0;
+    			for (int row = 0; row < img.getHeight(); ++row) {
+    				for (int col = 0; col < img.getWidth(); ++col) {
+    					inFloat[i] = ((float)dstBuff[i]) / 255.0f;
+	    				//System.out.println(i+"="+inFloat[i]);
+	    				++i;
+    				}
+    			}
+    			float[] inFloat = new float[d.length];
+	  			 */
+	  		}
+	  		imageVecs.add(imageVecsArray);
+	  		imageLabels.add(imageLabelsArray);
+	  		imageFiles.add(imageFilesArray);
+	  		System.out.println("Image Vecs = "+imageVecs.size()+" Array Size="+imageVecs.get(imageVecs.size()-1).length);
+	    }
 	}
-	
-	
+		
 	/**
 	 * Generates transfer learning multi task data.
 	 * Reads guid Neurosome from db ri, generates output from dataset, writes each output vector to db ro
@@ -368,30 +438,36 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 	 */
 	public static double testData(RelatrixClient ri, RelatrixClient ro, NeurosomeInterface ni, boolean verbose) throws IllegalArgumentException, ClassNotFoundException, IllegalAccessException, IOException {
 		int errCount = 0;
-		for(int j = 0; j < imageLabels.length; j++) {
-			double[] outNeuro = ni.execute(imageVecs[j]);
+	    double[][] imageVecsArray = null;
+	    String[] imageLabelsArray = null;
+	    String[] imageFilesArray = null;
+		for(int i = 0; i < imageLabels.size(); i++) {
+  			imageLabelsArray = imageLabels.get(i);
+  			imageVecsArray = imageVecs.get(i);
+		  for(int j = 0; j < imageLabelsArray.length; j++) {
+			double[] outNeuro = ni.execute(imageVecsArray[j]);
 			System.out.println(/*"Input "+img.toString()+*/" Output:"+Arrays.toString(outNeuro));
 			Object[] o = new Object[outNeuro.length];
-			for(int i = 0; i < outNeuro.length; i++) {
-				o[i] = new Double(outNeuro[i]);
+			for(int k = 0; k < outNeuro.length; k++) {
+				o[k] = new Double(outNeuro[k]);
 			}
 			ArgumentInstances ai = new ArgumentInstances(o);
 			try {
-				ro.store(ni.getRepresentation(), imageLabels[j], ai);
-				System.out.println(imageLabels[j]+" Stored!");
+				ro.store(ni.getRepresentation(), imageLabelsArray[j], ai);
+				System.out.println(imageLabelsArray[j]+" Stored!");
 			} catch (IllegalAccessException | IOException | DuplicateKeyException e) {
 				e.printStackTrace();
 			}
 			String predicted = classify(outNeuro);
-			if (!predicted.equals(imageLabels[j])) {
+			if (!predicted.equals(imageLabelsArray[j])) {
 				errCount++;
 			}	
 			if (verbose) {
-				System.out.printf("Predicted: %s\t\tActual:%s\n", predicted, imageLabels[j]);
+				System.out.printf("Predicted: %s\t\tActual:%s\n", predicted, imageLabelsArray[j]);
 			}
+		  }
 		}
-		
-		double accuracy = ((double) (imageLabels.length - errCount)) / imageLabels.length;
+		double accuracy = ((double) (imageLabelsArray.length - errCount)) / imageLabelsArray.length;
 		if (verbose) {
 			System.out.printf("Final accuracy was %.9f\n", accuracy);
 		}
@@ -410,34 +486,38 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 		//	rs = rkvc.findSetStream(sguid, "?", "?");
 		//} catch (IllegalArgumentException | ClassNotFoundException | IllegalAccessException | IOException e1) {
 		//	throw new RuntimeException(e1);
-		//}
-		datasetSize = (int) Stream.of().count();
-		imageVecs = new double[datasetSize][];
-		imageLabels = new String[datasetSize];
-		imageFiles = new String[datasetSize];
+		//}	    double[][] imageVecsArray = null;
+
+		for(int i = 0; i < imageLabels.size(); i++) {
+  			imageLabelsArray = imageLabels.get(i);
+  			imageVecsArray = imageVecs.get(i);
+		//datasetSize = (int) Stream.of().count();
+		imageVecs = new ArrayList<double[][]>();
+		imageLabels = new ArrayList<String[]>();
+		imageFiles = new ArrayList<String[]>();
 		Stream.of().forEach(e -> {
 			Comparable[] c = (Comparable[])e;
 			Object[] o = ((ArgumentInstances)c[1]).argInst;
-			imageVecs[ivec] = new double[o.length];
+			imageVecsArray[ivec] = new double[o.length];
 			for(int j = 0; j < o.length; j++)
-				imageVecs[ivec][j] = ((Double)o[j]).doubleValue();
+				imageVecsArray[ivec][j] = ((Double)o[j]).doubleValue();
 			int locationOfUnderscoreImage = ((String)c[0]).indexOf("_image");
 			String name = ((String)c[0]);
-			imageFiles[ivec] = ((String)c[0]);
+			imageFilesArray[ivec] = ((String)c[0]);
 			if(locationOfUnderscoreImage == -1)
 				name = "UNNOWN";
 			else
 				name = name.substring(0, locationOfUnderscoreImage);
-			imageLabels[ivec] = name;
-			System.out.println(ivec+" = "+sguid+": "+imageLabels[ivec]+" | "+Arrays.toString(imageVecs[ivec]));
+			imageLabelsArray[ivec] = name;
+			System.out.println(ivec+" = "+sguid+": "+imageLabelsArray[ivec]+" | "+Arrays.toString(imageVecsArray[ivec]));
 			++ivec;
 		});
-		
+		}
 		System.out.printf("Dataset from %s loaded with %d images%n", sguid, datasetSize);
 		// Construct a new world to spin up remote connection
 		//categoryNames.get(index).getName() is category
 		// MinRawFitness is steps * testPerStep args one and two of setStepFactors
-		getWorld().setStepFactors((float)datasetSize, 1.0f);
+		//getWorld().setStepFactors((float)datasetSize, 1.0f);
 	}
 	/**
 	 * Store the output from the passed Neurosome after it has processed data in imageVecs array.
@@ -446,8 +526,8 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 	 * @param ind
 	 */
 	private void storeInferredOutput(RelatrixClient ro, NeurosomeInterface ind) {
-		for (int step = 0; step < imageVecs.length; step++) {
-			double[] outNeuro = ind.execute(imageVecs[step]);
+		for (int step = 0; step < imageVecsArray.length; step++) {
+			double[] outNeuro = ind.execute(imageVecsArray[step]);
 			System.out.println(/*"Input "+img.toString()+*/" Output:"+Arrays.toString(outNeuro));
 			//System.out.println(/*"Input "+img.toString()+*/" Output:"+Arrays.toString(outNeuro));
 			Object[] o = new Object[outNeuro.length];
@@ -457,7 +537,7 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 			ArgumentInstances ai = new ArgumentInstances(o);
 			try {
 				//String fLabel = String.format("%05d %s",step,imageLabels[step]);
-				ro.store(ind.toString(), imageFiles[step], ai);
+				ro.store(ind.toString(), imageFilesArray[step], ai);
 				//System.out.println(imageLabels[step]+" Stored!");
 			} catch (IllegalAccessException | IOException | DuplicateKeyException e) {
 				e.printStackTrace();
@@ -502,20 +582,20 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 		//System.out.println("Neurosome original: "+(solver == null ? "NULL" : solver.getRepresentation()));
 		//System.out.println("Neurosome concat: "+(nt == null? "NULL" : nt.getRepresentation()));
 		//System.out.println("world "+(getWorld() == null ? "WORLD NULL" : getWorld()));
-    	for(int step = 0; step < getWorld().MaxSteps; step++) {
-			double[] outNeuro1 = solver.execute(imageVecs[step]);
+    	for(int step = 0; step < imageVecsArray.length; step++) {
+			double[] outNeuro1 = solver.execute(imageVecsArray[step]);
 			//System.out.println("Input "+imageLabels[step]+" Output1:"+Arrays.toString(outNeuro1));
 			// chain the output
 			//double[] outNeuro = nt.execute(outNeuro1);	
 			String opredicted = classify(outNeuro1);
-			if (!opredicted.equals(imageLabels[step])) {
+			if (!opredicted.equals(imageLabelsArray[step])) {
 				++oInErr;
 			}	
 			//System.out.printf("Predicted: %s\t\tActual:%s cat=%d File:%s\n", opredicted, imageLabels[step],categoryNames.indexOf(imageLabels[step]), imageFiles[step]);
-			double[] outNeuro = nt.execute(imageVecs[step]);
+			double[] outNeuro = nt.execute(imageVecsArray[step]);
 			//System.out.println("Input "+imageLabels[step]+" Output2:"+Arrays.toString(outNeuro));		
 			String predicted = classify(outNeuro);
-			if (!predicted.equals(imageLabels[step])) {
+			if (!predicted.equals(imageLabelsArray[step])) {
 				++nInErr;
 			}	
 			//System.out.printf("Predicted: %s\t\tActual:%s cat=%d File:%s\n", predicted, imageLabels[step],categoryNames.indexOf(imageLabels[step]), imageFiles[step]);
