@@ -39,7 +39,8 @@ import cnn.tools.Util;
  */
 public class xferlearnBatch extends NeurosomeTransferFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
-	private static boolean DEBUG = false;
+	public static boolean DEBUG = false;
+	public static boolean TIMING = false;
 	private static String prefix = "C:/etc/images/trainset/";//"/media/jg/tensordisk/images/trainset/";
 	//private static String localNode = "192.168.1.153";//"COREPLEX";
 	//private static String remoteNode = "192.168.1.153";//"COREPLEX";
@@ -125,7 +126,7 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 			//getWorld().setStepFactors((float)datasetSize, (float)solvers.size());
 			outputNeuros = Collections.synchronizedList(new ArrayList<nOutput>());
 			System.out.println("Building vector(s)...");
-			// We can only use 1 CUDA thread initially due to high inital memory requirements using original solvers
+			// We can only use 1 CUDA thread initially due to high initial memory requirements using original solvers
 			// Once transfer starts, we can increase thread level
 			int permThreads = LoadProperties.iCUDAThreads;
 			LoadProperties.iCUDAThreads = 1;
@@ -207,7 +208,8 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 	 */
 	public Object execute(NeurosomeInterface ind) {
 		Long tim = System.currentTimeMillis();
-		System.out.println("Exec "+Thread.currentThread().getName()+" id:"+Thread.currentThread().getId()+" for ind "+ind.getName());
+		if(TIMING)
+			System.out.println("Exec "+Thread.currentThread().getName()+" id:"+Thread.currentThread().getId()+" for ind "+ind.getName());
 	 	//float hits = 0;
         //int errCount = 0;
         double[] nCost = new double[outputNeuros.size()];
@@ -287,7 +289,8 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
          //} else {
         	 //getWorld().showTruth(ind, cost, results);
          //}
-     	 System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
+	    if(TIMING)
+	    	System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
          return cost;
 	}
 
@@ -572,37 +575,47 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 	 * Compares stored solver with passed presumed best individual against dataset input test vectors
 	 * to determine if new best individual exceeds accuracy of stored solver by given percentage.
 	 * @param nt The new concatenated Neurosome from Solver + best fit
+	 * @param solver The original parent solver
 	 * @return true if passed Neurosome is more accurate by given threshold. 
 	 */
 	public boolean xferTests(NeurosomeInterface nt, NeurosomeInterface solver)  {
 		int nInErr = 0;
 		int oInErr = 0;
-		int total = 0;
+		int totalo = 0;
+		int totaln = 0;
 		//NeuralNet.SHOWEIGHTS = true;
 		//System.out.println("Neurosome original: "+(solver == null ? "NULL" : solver.getRepresentation()));
 		//System.out.println("Neurosome concat: "+(nt == null? "NULL" : nt.getRepresentation()));
 		//System.out.println("world "+(getWorld() == null ? "WORLD NULL" : getWorld()));
-    	for(int step = 0; step < imageVecsArray.length; step++) {
-			double[] outNeuro1 = solver.execute(imageVecsArray[step]);
+    	for(int step = 0; step < imageVecs.size(); step++) {
+			ArrayList<double[]> outNeuro1 = solver.execute(imageVecs.get(step));
+			String[] imageLabels2 = imageLabels.get(step);
 			//System.out.println("Input "+imageLabels[step]+" Output1:"+Arrays.toString(outNeuro1));
 			// chain the output
-			//double[] outNeuro = nt.execute(outNeuro1);	
-			String opredicted = classify(outNeuro1);
-			if (!opredicted.equals(imageLabelsArray[step])) {
-				++oInErr;
-			}	
+			//double[] outNeuro = nt.execute(outNeuro1);
+			for(int step2 = 0; step2 < outNeuro1.size(); step2++) {
+				double[] outNeuro2 = outNeuro1.get(step2);
+				String opredicted = classify(outNeuro2);
+				if (!opredicted.equals(imageLabels2[step2])) {
+					++oInErr;
+				}
+				++totalo;
+			}
 			//System.out.printf("Predicted: %s\t\tActual:%s cat=%d File:%s\n", opredicted, imageLabels[step],categoryNames.indexOf(imageLabels[step]), imageFiles[step]);
-			double[] outNeuro = nt.execute(imageVecsArray[step]);
-			//System.out.println("Input "+imageLabels[step]+" Output2:"+Arrays.toString(outNeuro));		
-			String predicted = classify(outNeuro);
-			if (!predicted.equals(imageLabelsArray[step])) {
-				++nInErr;
-			}	
+			ArrayList<double[]> outNeuro = nt.execute(imageVecs.get(step));
+			//System.out.println("Input "+imageLabels[step]+" Output2:"+Arrays.toString(outNeuro));	
+			for(int step2 = 0; step2 < outNeuro.size(); step2++) {
+				double[] outNeuro2 = outNeuro.get(step2);
+				String predicted = classify(outNeuro2);
+				if (!predicted.equals(imageLabels2[step2])) {
+					++nInErr;
+				}
+				++totaln;
+			}
 			//System.out.printf("Predicted: %s\t\tActual:%s cat=%d File:%s\n", predicted, imageLabels[step],categoryNames.indexOf(imageLabels[step]), imageFiles[step]);
-			++total;
 		}	
-		double oaccuracy = ((double) (total - oInErr)) / (double)total;
-		double naccuracy = ((double) (total - nInErr)) / (double)total;
+		double oaccuracy = ((double) (totalo - oInErr)) / (double)totalo;
+		double naccuracy = ((double) (totaln - nInErr)) / (double)totaln;
 		double improvement = naccuracy - oaccuracy;
 		System.out.println("Improvement of best = "+improvement);
 		return (improvement >= improvementThreshold);
