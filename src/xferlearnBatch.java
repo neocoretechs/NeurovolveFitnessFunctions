@@ -132,6 +132,9 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 			LoadProperties.iCUDAThreads = 1;
 			stim = System.currentTimeMillis();
 			/*
+			String thname = Thread.currentThread().getName();
+			System.out.println("Setting temp thread from "+thname);
+			Thread.currentThread().setName("COMPUTE1");
 			for(NeurosomeInterface solver: solvers) {
 				solver.init();
 				// Now generate vectors of output of inference for stored solver to use as input to evolve
@@ -142,13 +145,29 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 				for(int i = 0; i < solver.getLayers(); i++) {
 					noutput.activations[i] = solver.getActivationFunction(i);
 				}
-				noutput.outputVecs = new double[datasetSize][];
-				for(int step = 0; step < datasetSize; step++) {
-					double[] outVec = solver.execute(imageVecs[step]);
-					noutput.outputVecs[step] = outVec;
-				}
+				// We have the image tests chunked for maximum batch size for each test.
+				// Perform the batched chunk, get the results, then chunk them the same way in the
+				// output vectors that will serve as inputs to the next round of batched chunks
+				// in the main test fitness function body below.
+				noutput.outputVecs = new ArrayList<double[][]>(imageVecs.size());
+				long ttim = System.currentTimeMillis();
+			    for(int test = 0; test < imageVecs.size() ; test++) {
+			    	ArrayList<double[]> resVecs = solver.execute(imageVecs.get(test));
+					double[][] resArray = new double[resVecs.size()][];
+					for(int k = 0; k < resVecs.size(); k++) {
+						resArray[k] = resVecs.get(k);
+					}
+			    	noutput.outputVecs.add(resArray);
+			    }
+				System.out.println(solver+" executed batches in "+(System.currentTimeMillis()-ttim)+" ms.");
+				//noutput.outputVecs = new double[datasetSize][];
+				//for(int step = 0; step < datasetSize; step++) {
+				//	double[] outVec = solver.execute(imageVecs[step]);
+				//	noutput.outputVecs[step] = outVec;
+				//}
 				outputNeuros.add(noutput);
 			}
+			Thread.currentThread().setName(thname);
 			*/
 			//
 			// Generate the full set of tests for each solver. The tests are chunked based on maximum batch size
@@ -156,12 +175,15 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 			// The noutput.outputVecs list is chunked in the same manner are the test images, but these outputVecs
 			// are the result of executing the batched tests against the solver contained in the noutput structure.
 			//
+			
 			Future<?>[] jobs = new Future[solvers.size()];
 			threadIndex.set(0);
 			for(int i = 0; i < solvers.size(); i++) {
 			    	jobs[i] = SynchronizedFixedThreadPoolManager.submit(new Runnable() {
 			    		@Override
 			    		public void run() {
+			    			if(Thread.currentThread().getName().equals("COMPUTE1"))
+			    				Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
 			    		    NeurosomeInterface solver = solvers.get(threadIndex.getAndIncrement());
 			    			solver.init();
 							// Now generate vectors of output of inference for stored solver to use as input to evolve
@@ -173,16 +195,11 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 								noutput.activations[i] = solver.getActivationFunction(i);
 							}
 							noutput.outputVecs = new ArrayList<double[][]>(imageVecs.size());
-							/*
-							for(int step = 0; step < datasetSize; step++) {
-								double[] outVec = solver.execute(imageVecs[step]);
-								noutput.outputVecs[step] = outVec;
-							}
-							*/
 							// We have the image tests chunked for maximum batch size for each test.
 							// Perform the batched chunk, get the results, then chunk them the same way in the
 							// output vectors that will serve as inputs to the next round of batched chunks
 							// in the main test fitness function body below.
+							long ttim = System.currentTimeMillis();
 						    for(int test = 0; test < imageVecs.size() ; test++) {
 						    	ArrayList<double[]> resVecs = solver.execute(imageVecs.get(test));
 								double[][] resArray = new double[resVecs.size()][];
@@ -191,11 +208,14 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 								}
 						    	noutput.outputVecs.add(resArray);
 						    }
+						    if(TIMING)
+						    	System.out.println(Thread.currentThread().getName()+" "+solver+" executed batches in "+(System.currentTimeMillis()-ttim)+" ms.");
 							outputNeuros.add(noutput);
 			    		} // run
 			    	},"COMPUTE"); // spin
 			} 
 			SynchronizedFixedThreadPoolManager.waitForCompletion(jobs);
+			
 			// restore CUDA threads for transfer learning data level
 			LoadProperties.iCUDAThreads = permThreads;
 			System.out.println(outputNeuros.size()+" Vector(s) built in in "+(System.currentTimeMillis()-stim)+" ms.");
