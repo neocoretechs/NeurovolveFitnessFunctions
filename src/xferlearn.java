@@ -72,7 +72,7 @@ public class xferlearn extends NeurosomeTransferFunction {
 	private static String[] imageFiles;
 	private static AtomicInteger threadIndex = new AtomicInteger(0);
 	//private static NeurosomeInterface solver = null;
-	private static double improvementThreshold = .1; //percentage of improvement to return true in comparison of accuracy
+	private static double improvementThreshold = LoadProperties.fOffspringImprovementFactor; //percentage of improvement to return true in comparison of accuracy
 	
 	static class nOutput {
 		String guid;
@@ -474,8 +474,10 @@ public class xferlearn extends NeurosomeTransferFunction {
 		boolean isBetter = xferTests(newSolver, solver);
 		if(isBetter) {
 			System.out.println("Which rose above improvement threshold of "+improvementThreshold);
-			Storage.storeSolver(newSolver, LoadProperties.sxferDb);
-			System.out.println("*** transfer data stored.***");
+			if(LoadProperties.bstoreImprovedOffspring) {
+				Storage.storeSolver(newSolver, LoadProperties.sxferDb);
+				System.out.println("*** transfer data stored.***");
+			}
 		} else {
 			System.out.println("Which fell below improvement threshold of "+improvementThreshold);
 		}

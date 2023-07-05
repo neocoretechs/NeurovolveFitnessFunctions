@@ -19,7 +19,7 @@ import com.neocoretechs.neurovolve.worlds.World;
 public class imgraw extends NeurosomeFitnessFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
 	private static boolean DEBUG = false;
-	private static String prefix = "D:/etc/images/trainset/";
+	private static String prefix = "C:/etc/images/trainset/";
     private static Object mutex = new Object();
     private static float breakOnAccuracyPercentage = .8f; // set to 0 for 100% accuracy expected
 	//Dataset dataset;

@@ -34,7 +34,7 @@ import cnn.tools.Util;
 public class imgclf extends NeurosomeTransferFunction {
 	private static final long serialVersionUID = -4154985360521212822L;
 	private static boolean DEBUG = false;
-	private static String prefix = "/media/jg/tensordisk/images/trainset/";//"D:/etc/images/trainset/";//
+	private static String prefix = "C:/etc/images/trainset/";//"/media/jg/tensordisk/images/trainset/";//
     //private static Object mutex = new Object();
     private static float breakOnAccuracyPercentage = .7f; // set to 0 for 100% accuracy expected
 	//Dataset dataset;
@@ -90,8 +90,8 @@ public class imgclf extends NeurosomeTransferFunction {
 	 * Compute cross entropy loss, return cost
 	 */
 	public Object execute(NeurosomeInterface ind) {
-		//Long tim = System.currentTimeMillis();
-		//System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
+		Long tim = System.currentTimeMillis();
+		System.out.println("Exec "+Thread.currentThread().getName()+" for ind "+ind.getName());
 	 	//float hits = 0;
         //int errCount = 0;
 
@@ -134,7 +134,7 @@ public class imgclf extends NeurosomeTransferFunction {
         	 getWorld().showTruth(ind, cost, results);
          }
          */
-     	 //System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
+     	 System.out.println("Exit "+Thread.currentThread().getName()+" for ind "+ind.getName()+" in "+(System.currentTimeMillis()-tim));
          return cost;
 	}
 

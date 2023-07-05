@@ -7,8 +7,8 @@ import java.io.InputStream;
 
 import javax.imageio.ImageIO;
 
-import com.neocoretechs.neurovolve.Neurosome;
 import com.neocoretechs.neurovolve.NeurosomeInterface;
+import com.neocoretechs.neurovolve.experimental.NeurosomeCPU;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
 import com.neocoretechs.neurovolve.properties.LoadProperties;
 import com.neocoretechs.neurovolve.worlds.RelatrixWorld;
