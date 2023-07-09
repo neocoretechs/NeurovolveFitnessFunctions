@@ -129,12 +129,9 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 			// We can only use 1 CUDA thread initially due to high initial memory requirements using original solvers
 			// Once transfer starts, we can increase thread level
 			int permThreads = LoadProperties.iCUDAThreads;
-			LoadProperties.iCUDAThreads = 1;
+			LoadProperties.iCUDAThreads = 2; // main thread plus compute thread
 			stim = System.currentTimeMillis();
-			/*
-			String thname = Thread.currentThread().getName();
-			System.out.println("Setting temp thread from "+thname);
-			Thread.currentThread().setName("COMPUTE1");
+			/* main thread only exec
 			for(NeurosomeInterface solver: solvers) {
 				solver.init();
 				// Now generate vectors of output of inference for stored solver to use as input to evolve
@@ -167,23 +164,19 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 				//}
 				outputNeuros.add(noutput);
 			}
-			Thread.currentThread().setName(thname);
 			*/
 			//
 			// Generate the full set of tests for each solver. The tests are chunked based on maximum batch size
 			// and this is all set up in the createImageVecs method previously executed above.
 			// The noutput.outputVecs list is chunked in the same manner are the test images, but these outputVecs
 			// are the result of executing the batched tests against the solver contained in the noutput structure.
-			//
-			
+			//		
 			Future<?>[] jobs = new Future[solvers.size()];
 			threadIndex.set(0);
 			for(int i = 0; i < solvers.size(); i++) {
 			    	jobs[i] = SynchronizedFixedThreadPoolManager.submit(new Runnable() {
 			    		@Override
 			    		public void run() {
-			    			if(Thread.currentThread().getName().equals("COMPUTE1"))
-			    				Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
 			    		    NeurosomeInterface solver = solvers.get(threadIndex.getAndIncrement());
 			    			solver.init();
 							// Now generate vectors of output of inference for stored solver to use as input to evolve
@@ -575,6 +568,7 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 	* Old solver is preserved from above loading in init()
 	* Store it in Db to which client is connected
 	* @param ind the new best individual from runs.
+	* @param solver Original parent seed solver loaded from db
 	* @return true if improvement of passed best solver concatenated with stored solver exceeds improvementThreshold value as percentage over stored solver
 	*/
 	public boolean transfer(NeurosomeInterface ind, NeurosomeInterface solver) {
