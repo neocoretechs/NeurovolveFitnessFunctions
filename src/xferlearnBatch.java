@@ -81,7 +81,10 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 	static class nOutput {
 		String guid;
 		ActivationInterface[] activations; // each layer of source
-		ArrayList<double[][]> outputVecs;
+		ArrayList<double[][]> outputVecs; // test batch results; each test image times output vectors from inference, batched to max
+		ArrayList<String[]> predVecs; // predicted category for each test image output vector, batched to max
+		int total; // sum of each batch size
+		int numWrong; // number incorrect out of total
 	}
 	
 	/**
@@ -170,7 +173,9 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 			// and this is all set up in the createImageVecs method previously executed above.
 			// The noutput.outputVecs list is chunked in the same manner are the test images, but these outputVecs
 			// are the result of executing the batched tests against the solver contained in the noutput structure.
-			//		
+			//
+			AtomicInteger cTotal = new AtomicInteger(0);
+			AtomicInteger cCorrect = new AtomicInteger(0);
 			Future<?>[] jobs = new Future[solvers.size()];
 			threadIndex.set(0);
 			for(int i = 0; i < solvers.size(); i++) {
@@ -188,6 +193,7 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 								noutput.activations[i] = solver.getActivationFunction(i);
 							}
 							noutput.outputVecs = new ArrayList<double[][]>(imageVecs.size());
+							noutput.predVecs = new ArrayList<String[]>(imageVecs.size());
 							// We have the image tests chunked for maximum batch size for each test.
 							// Perform the batched chunk, get the results, then chunk them the same way in the
 							// output vectors that will serve as inputs to the next round of batched chunks
@@ -195,12 +201,28 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 							long ttim = System.currentTimeMillis();
 						    for(int test = 0; test < imageVecs.size() ; test++) {
 						    	ArrayList<double[]> resVecs = solver.execute(imageVecs.get(test));
+						    	String[] imageLabelsArray = imageLabels.get(test);
 								double[][] resArray = new double[resVecs.size()][];
+								String[] predArray = new String[resVecs.size()]; 
+								if(resVecs.size() != imageLabelsArray.length)
+									throw new RuntimeException("Size mismatch in result to image lables "+resVecs.size()+" "+imageLabelsArray.length);
 								for(int k = 0; k < resVecs.size(); k++) {
 									resArray[k] = resVecs.get(k);
+									// for later xferTest comparing parent output to concatenated improved output
+									String opredicted = classify(resArray[k]);
+									if(opredicted.equals(imageLabelsArray[k])) {
+										cCorrect.getAndIncrement();
+									} else {
+										++noutput.numWrong;
+									}
+									cTotal.getAndIncrement();
+									++noutput.total;
+									predArray[k] = opredicted;
 								}
 						    	noutput.outputVecs.add(resArray);
+						    	noutput.predVecs.add(predArray);
 						    }
+						    System.out.println("Solver "+solver+" wrong="+noutput.numWrong+" total="+noutput.total);
 						    if(TIMING)
 						    	System.out.println(Thread.currentThread().getName()+" "+solver+" executed batches in "+(System.currentTimeMillis()-ttim)+" ms.");
 							outputNeuros.add(noutput);
@@ -212,6 +234,7 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 			// restore CUDA threads for transfer learning data level
 			LoadProperties.iCUDAThreads = permThreads;
 			System.out.println(outputNeuros.size()+" Vector(s) built in in "+(System.currentTimeMillis()-stim)+" ms.");
+			System.out.println("Original Solvers correctly predicted "+cCorrect.get()+" out of "+cTotal.get());
 		}
 	}
 	    	
@@ -596,41 +619,38 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 	 */
 	public boolean xferTests(NeurosomeInterface nt, NeurosomeInterface solver)  {
 		int nInErr = 0;
-		int oInErr = 0;
-		int totalo = 0;
 		int totaln = 0;
 		//NeuralNet.SHOWEIGHTS = true;
 		//System.out.println("Neurosome original: "+(solver == null ? "NULL" : solver.getRepresentation()));
 		//System.out.println("Neurosome concat: "+(nt == null? "NULL" : nt.getRepresentation()));
 		//System.out.println("world "+(getWorld() == null ? "WORLD NULL" : getWorld()));
-    	for(int step = 0; step < imageVecs.size(); step++) {
-			ArrayList<double[]> outNeuro1 = solver.execute(imageVecs.get(step));
-			String[] imageLabels2 = imageLabels.get(step);
-			//System.out.println("Input "+imageLabels[step]+" Output1:"+Arrays.toString(outNeuro1));
-			// chain the output
-			//double[] outNeuro = nt.execute(outNeuro1);
-			for(int step2 = 0; step2 < outNeuro1.size(); step2++) {
-				double[] outNeuro2 = outNeuro1.get(step2);
-				String opredicted = classify(outNeuro2);
-				if (!opredicted.equals(imageLabels2[step2])) {
-					++oInErr;
-				}
-				++totalo;
+		// find stats for original parent
+		nOutput parentSolver = null;
+		for(nOutput neuroStats: outputNeuros) {
+			if(neuroStats.guid.equals(solver.getName())) {
+				parentSolver = neuroStats;
+				break;
 			}
-			//System.out.printf("Predicted: %s\t\tActual:%s cat=%d File:%s\n", opredicted, imageLabels[step],categoryNames.indexOf(imageLabels[step]), imageFiles[step]);
-			ArrayList<double[]> outNeuro = nt.execute(imageVecs.get(step));
-			//System.out.println("Input "+imageLabels[step]+" Output2:"+Arrays.toString(outNeuro));	
-			for(int step2 = 0; step2 < outNeuro.size(); step2++) {
-				double[] outNeuro2 = outNeuro.get(step2);
-				String predicted = classify(outNeuro2);
-				if (!predicted.equals(imageLabels2[step2])) {
+		}
+		if(parentSolver == null)
+			throw new RuntimeException("Could not find parent solver in pre-initialized stats:"+solver);
+	    for(int test = 0; test < imageVecs.size() ; test++) {
+	    	ArrayList<double[]> resVecs = nt.execute(imageVecs.get(test));
+	    	String[] imageLabelsArray = imageLabels.get(test);
+			if(resVecs.size() != imageLabelsArray.length)
+				throw new RuntimeException("Size mismatch in result to image labels "+resVecs.size()+" "+imageLabelsArray.length);
+			for(int k = 0; k < resVecs.size(); k++) {
+				// for later xferTest comparing parent output to concatenated improved output
+				String opredicted = classify(resVecs.get(k));
+				if(!opredicted.equals(imageLabelsArray[k])) {
 					++nInErr;
 				}
 				++totaln;
 			}
-			//System.out.printf("Predicted: %s\t\tActual:%s cat=%d File:%s\n", predicted, imageLabels[step],categoryNames.indexOf(imageLabels[step]), imageFiles[step]);
-		}	
-		double oaccuracy = ((double) (totalo - oInErr)) / (double)totalo;
+	    }
+	    System.out.println("Parent solver "+parentSolver.guid+" wrong="+parentSolver.numWrong+" total="+parentSolver.total);
+	    System.out.println("New solver "+nt+" wrong="+nInErr+" total="+totaln);
+		double oaccuracy = ((double) (parentSolver.total - parentSolver.numWrong)) / (double)parentSolver.total;
 		double naccuracy = ((double) (totaln - nInErr)) / (double)totaln;
 		double improvement = naccuracy - oaccuracy;
 		System.out.println("Improvement of best = "+improvement);
