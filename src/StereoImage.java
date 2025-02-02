@@ -4,19 +4,21 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.stream.Stream;
 
 import javax.imageio.ImageIO;
 
 import com.neocoretechs.neurovolve.NeurosomeInterface;
 import com.neocoretechs.neurovolve.experimental.NeurosomeCPU;
+import com.neocoretechs.neurovolve.fitnessfunctions.False;
 import com.neocoretechs.neurovolve.fitnessfunctions.NeurosomeFitnessFunction;
+import com.neocoretechs.neurovolve.fitnessfunctions.True;
 import com.neocoretechs.neurovolve.properties.LoadProperties;
 import com.neocoretechs.neurovolve.worlds.RelatrixWorld;
 import com.neocoretechs.neurovolve.worlds.World;
 import com.neocoretechs.relatrix.client.RelatrixClient;
 import com.neocoretechs.relatrix.client.RemoteStream;
-import com.neocoretechs.volvex.functions.False;
-import com.neocoretechs.volvex.functions.True;
+
 
 //import com.neocoretechs.robocore.machine.bridge.CircularBlockingDeque;
 
@@ -64,8 +66,8 @@ public class StereoImage extends NeurosomeFitnessFunction {
 		}
 
 		try {		
-		    RemoteStream stream = (RemoteStream) rkvc.findSetStream("?", "?", "?");
-			stream.of().forEach(e -> {
+		    Stream stream = rkvc.findStream('?', '?', '?');
+			stream.forEach(e -> {
 					StereoscopicImageBytes sib = (StereoscopicImageBytes) ((Comparable[]) e)[2];
 					synchronized(mutex) {
 						bufferl = sib.getLeft(); // 3 byte BGR
@@ -91,7 +93,7 @@ public class StereoImage extends NeurosomeFitnessFunction {
 				//}
 		});
 		System.out.println("End of retrieval");
-		} catch(IllegalAccessException | IllegalArgumentException | ClassNotFoundException | IOException iae) {
+		} catch(IllegalArgumentException | IOException iae) {
 			iae.printStackTrace();
 			return null;
 		}

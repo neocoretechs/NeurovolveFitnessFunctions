@@ -494,7 +494,7 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 			try {
 				ro.store(ni.getRepresentation(), imageLabelsArray[j], ai);
 				System.out.println(imageLabelsArray[j]+" Stored!");
-			} catch (IllegalAccessException | IOException | DuplicateKeyException e) {
+			} catch (IOException e) {
 				e.printStackTrace();
 			}
 			String predicted = classify(outNeuro);
@@ -578,7 +578,7 @@ public class xferlearnBatch extends NeurosomeTransferFunction {
 				//String fLabel = String.format("%05d %s",step,imageLabels[step]);
 				ro.store(ind.toString(), imageFilesArray[step], ai);
 				//System.out.println(imageLabels[step]+" Stored!");
-			} catch (IllegalAccessException | IOException | DuplicateKeyException e) {
+			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		}
